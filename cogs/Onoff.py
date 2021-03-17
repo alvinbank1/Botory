@@ -30,16 +30,3 @@ class Core(DBCog):
         await self.app.change_presence(status = discord.Status.offline)
         await asyncio.sleep(1)
         await self.app.close()
-
-    @commands.command(name = 'ignorehere')
-    @commands.has_guild_permissions(administrator = True)
-    async def SetIgnore(self, ctx):
-        await ctx.message.delete()
-        GlobalDB['IgnoreChannels'].add(ctx.channel.id)
-
-    @commands.command(name = 'watchhere')
-    @commands.has_guild_permissions(administrator = True)
-    async def DelIgnore(self, ctx):
-        await ctx.message.delete()
-        GlobalDB['IgnoreChannels'].remove(ctx.channel.id)
-
