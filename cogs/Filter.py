@@ -1,4 +1,4 @@
-import discord
+import discord, uuid
 from discord.ext import commands
 from pkgs.GlobalDB import GlobalDB
 from pkgs.DBCog import DBCog
@@ -9,7 +9,6 @@ def SkipCheck(func):
     async def wrapper(self, message):
         if message.guild.id != GlobalDB['StoryGuildID']: return
         if message.author.bot or message.author.guild_permissions.administrator: return
-        if message.channel.id in GlobalDB['IgnoreChannels']: return
         return await func(self, message)
     return wrapper
 
@@ -21,22 +20,6 @@ class Core(DBCog):
     def initDB(self):
         self.DB = dict()
         self.DB['ReportChannel'] = None
-        self.DB['MaxLength'] = 200
-        self.DB['MaxLines'] = 4
-
-    @commands.command(name = 'setlimit')
-    @commands.has_guild_permissions(administrator = True)
-    async def SetLimit(self, ctx, arg):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        await ctx.message.delete()
-        if arg[-1] == 'l':
-            self.DB['MaxLines'] = int(arg[:-1])
-            embed = discord.Embed(title = '', description = f'줄수 제한이 {self.DB["MaxLines"]}줄이 되었습니다')
-            await ctx.channel.send(embed = embed)
-        else:
-            self.DB['MaxLength'] = int(arg)
-            embed = discord.Embed(title = '', description = f'글자수 제한이 {self.DB["MaxLength"]}글자가 되었습니다')
-            await ctx.channel.send(embed = embed)
 
     @commands.command(name = 'reporthere')
     @commands.has_guild_permissions(administrator = True)
@@ -69,32 +52,15 @@ class Core(DBCog):
 
     @commands.Cog.listener('on_message')
     @SkipCheck
-    async def LengthLimiter(self, message):
-        if len(message.content) > self.DB['MaxLength']:
-            await message.channel.send(f'<@{message.author.id}> {self.DB["MaxLength"]}자 초과로 삭제되었습니다.', delete_after = 1.0)
-            await message.delete()
-        if message.content.count('\n') >= self.DB['MaxLines']:
-            await message.channel.send(f'<@{message.author.id}> {self.DB["MaxLines"] + 1}줄 이상은 안받아요.', delete_after = 1.0)
-            await message.delete()
-
-    @commands.Cog.listener('on_message')
-    @SkipCheck
     async def DontMentionReply(self, message):
         if message.reference != None:
             if message.reference.resolved.author in message.mentions:
-                await message.channel.send('답장을 할 때는 되도록이면 오른쪽 `@켜짐`을 눌러 멘션을 꺼주세요!', delete_after = 5.0)
-
-    @commands.Cog.listener('on_message')
-    @SkipCheck
-    async def DontSendMultipleFiles(self, message):
-        if len(message.attachments) > 1:
-            await message.channel.send('파일은 한번에 하나씩만 보내 주세요!', delete_after = 2.0)
+                await message.channel.send('답장을 할 때는 되도록이면 오른쪽 `@켜짐`을 눌러 멘션을 꺼주세요!', delete_after = 5.0, reference = message)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
         if reaction.message.guild.id != GlobalDB['StoryGuildID']: return
         if user.bot or user.guild_permissions.administrator: return
-        if reaction.message.channel.id in GlobalDB['IgnoreChannels']: return
         if '🖕' in str(reaction.emoji):
             await reaction.clear()
             await self.MiddleFingerReport(user.id, reaction.message.channel)
@@ -104,3 +70,16 @@ class Core(DBCog):
         await channel.send(f'<@{UserID}> 중지 절단 완료.')
         if ReportChannel:
             await ReportChannel.send(f'<@{UserID}> 이 사용자 중지 이모지 사용으로 경고바랍니다.', allowed_mentions = discord.AllowedMentions.none())
+
+    @commands.command(name = 'ignorehere')
+    @commands.has_guild_permissions(administrator = True)
+    async def SetIgnore(self, ctx):
+        await ctx.message.delete()
+        GlobalDB['IgnoreChannels'].add(ctx.channel.id)
+
+    @commands.command(name = 'watchhere')
+    @commands.has_guild_permissions(administrator = True)
+    async def DelIgnore(self, ctx):
+        await ctx.message.delete()
+        GlobalDB['IgnoreChannels'].remove(ctx.channel.id)
+

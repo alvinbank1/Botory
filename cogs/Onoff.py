@@ -12,7 +12,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await self.app.change_presence(activity = discord.Game('Botory 2.2.2 by Undec'))
+        await self.app.change_presence(activity = discord.Game('Botory 2.3.0 by Undec'))
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])
         self.MemberRole = discord.utils.get(guild.roles, name = '멤버')
         perms = self.MemberRole.permissions
@@ -30,16 +30,3 @@ class Core(DBCog):
         await self.app.change_presence(status = discord.Status.offline)
         await asyncio.sleep(1)
         await self.app.close()
-
-    @commands.command(name = 'ignorehere')
-    @commands.has_guild_permissions(administrator = True)
-    async def SetIgnore(self, ctx):
-        await ctx.message.delete()
-        GlobalDB['IgnoreChannels'].add(ctx.channel.id)
-
-    @commands.command(name = 'watchhere')
-    @commands.has_guild_permissions(administrator = True)
-    async def DelIgnore(self, ctx):
-        await ctx.message.delete()
-        GlobalDB['IgnoreChannels'].remove(ctx.channel.id)
-

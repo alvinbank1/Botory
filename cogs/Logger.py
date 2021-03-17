@@ -34,7 +34,6 @@ class Core(DBCog):
     async def on_message(self, message):
         if message.guild.id != GlobalDB['StoryGuildID']: return
         if message.author.bot: return
-        if message.channel.id in GlobalDB['IgnoreChannels']: return
         if len(message.attachments) and self.DB['Attachments']:
             files = [await attachment.to_file(spoiler = attachment.is_spoiler(), use_cached = True) for attachment in message.attachments]
             LogChannel = message.guild.get_channel(self.DB['Attachments'])
@@ -52,7 +51,6 @@ class Core(DBCog):
     async def on_reaction_remove(self, reaction, user):
         if reaction.message.guild.id != GlobalDB['StoryGuildID']: return
         if user.bot: return
-        if reaction.message.channel.id in GlobalDB['IgnoreChannels']: return
         if self.DB['Reaction']:
             embed = discord.Embed(title = '',
                     description = f'Reaction deleted from [a message]({reaction.message.jump_url}) in <#{reaction.message.channel.id}>',
