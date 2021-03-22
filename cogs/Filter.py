@@ -43,15 +43,6 @@ class Core(DBCog):
 
     @commands.Cog.listener('on_message')
     @SkipCheck
-    async def DontMentionMaster(self, message):
-        if "서버장" in list(map(lambda x: x.top_role.name, message.mentions)):
-            await message.channel.send("<@%d> 허가받은 역할멘션 외 서버장 직접 멘션은 경고조치됩니다."%message.author.id)
-            if self.DB['ReportChannel']:
-                ReportChannel = message.guild.get_channel(self.DB['ReportChannel'])
-                await ReportChannel.send("<@%d> 이 사용자 서버장 직접멘션으로 경고바랍니다."%message.author.id, allowed_mentions = discord.AllowedMentions.none())
-
-    @commands.Cog.listener('on_message')
-    @SkipCheck
     async def DontMentionReply(self, message):
         if message.reference != None:
             if message.reference.resolved.author in message.mentions:
