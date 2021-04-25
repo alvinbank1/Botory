@@ -5,14 +5,34 @@ from pkgs.GlobalDB import GlobalDB
 from pkgs.Scheduler import Schedule
 
 class Toto:
-    def __init__(self, title, desc, ateam, bteam):
+    def __init__(self, title, desc, team0, team1, guild, cog):
         self.title = title
         self.desc = desc
-        self.ateam = ateam
-        self.bteam = bteam
-        self.abet = dict()
-        self.bbet = dict()
+        self.name = [team0, team1]
+        self.bet = [dict(), dict()]
         self.on_bet = False
+        self.guild = guild
+        self.cog = cog
+
+    def getprop(self, index):
+        tot = [self.gettot(0), self.gettot(1)]
+        if index == 1: tot = tot[::-1]
+        if tot[0] == 0: return -1
+        return tot[1] / tot[0]
+
+    def gettot(self, index):
+        tot = 0
+        for key in self.bet[index]: tot += self.bet[index][key]
+        return tot
+
+    def getmax(self, index):
+        mxbet = mxcnt = mxid = 0
+        for key in self.bet[index]: mxbet = max([mxbet, self.bet[index][key]])
+        for key in self.bet[index]:
+            if mxbet == self.bet[index][key]:
+                mxid = key
+                mxcnt += 1
+        return self.cog.GetDisplayName(self.guild.get_member(mxid)), mxbet
 
 class Core(DBCog):
     def __init__(self, app):
@@ -106,8 +126,8 @@ class Core(DBCog):
 
     @commands.command(name = 'newtoto')
     @commands.has_guild_permissions(administrator = True)
-    async def NewToto(self, ctx, title, desc, ateam, bteam):
-        self.toto = Toto(title, desc, ateam, bteam)
+    async def NewToto(self, ctx, title, desc, team0, team1):
+        self.toto = Toto(title, desc, team0, team1, ctx.guild, self)
         await ctx.message.delete()
         TotoChannel = ctx.guild.get_channel(self.DB['TotoChannel'])
         TotoMessage = await TotoChannel.send('temp')
@@ -138,17 +158,13 @@ class Core(DBCog):
             await TotoChannel.send(f'<@{msg.author.id}>님 xp가 부족하여 베팅 취소되었습니다.', delete_after = 3.0)
             return
         if val == 0:
-            if msg.author.id in self.toto.abet: del(self.toto.abet[msg.author.id])
-            if msg.author.id in self.toto.bbet: del(self.toto.bbet[msg.author.id])
+            for i in range(2):
+                if msg.author.id in self.toto.bet[i]: del(self.toto.bet[i][msg.author.id])
             await TotoChannel.send(f'<@{msg.author.id}>님 베팅 취소되었습니다.', delete_after = 3.0)
-        if val > 0:
-            if msg.author.id in self.toto.bbet: del(self.toto.bbet[msg.author.id])
-            self.toto.abet[msg.author.id] = val
-            await TotoChannel.send(f'<@{msg.author.id}>님 {self.toto.ateam}에 {val}xp 베팅되었습니다.', delete_after = 3.0)
-        if val < 0:
-            if msg.author.id in self.toto.abet: del(self.toto.abet[msg.author.id])
-            self.toto.bbet[msg.author.id] = -val
-            await TotoChannel.send(f'<@{msg.author.id}>님 {self.toto.bteam}에 {-val}xp 베팅되었습니다.', delete_after = 3.0)
+        val, index = abs(val), int(val < 0)
+        if msg.author.id in self.toto.bet[1 - index]: del(self.toto.bet[1 - index][msg.author.id])
+        self.toto.bet[index][msg.author.id] = val
+        await TotoChannel.send(f'<@{msg.author.id}>님 {self.toto.name[index]}에 {val}xp 베팅되었습니다.', delete_after = 3.0)
 
     @tasks.loop(seconds = 5.0)
     async def updateembed(self, TotoMessage):
@@ -159,20 +175,20 @@ class Core(DBCog):
             'author' : {'name' : "경험치 토토"},
             'fields' : [
                 {
-                    'name' : f':regional_indicator_a: {self.toto.ateam}',
-                    'value' : self.get_field_text(self.toto.abet, TotoMessage.guild)
+                    'name' : f':regional_indicator_a: {self.toto.name[0]}',
+                    'value' : self.get_field_text(0, TotoMessage.guild)
                 },
                 {
-                    'name' : f':regional_indicator_b: {self.toto.bteam}',
-                    'value' : self.get_field_text(self.toto.bbet, TotoMessage.guild)
+                    'name' : f':regional_indicator_b: {self.toto.name[1]}',
+                    'value' : self.get_field_text(1, TotoMessage.guild)
                 },
                 {
                     'name' : '베팅 방법',
                     'value' : '+숫자 혹은 -숫자 치시면 됩니다. 가장 마지막으로 베팅한 것만 적용되며 0을 입력하면 베팅이 취소됩니다.\n' +
                         '예시)\n' +
-                        '`+1000` :regional_indicator_a:에 1000xp 베팅\n' + 
-                        '`-2000` :regional_indicator_b:에 2000xp 베팅\n' + 
-                        '`0` 베팅취소'
+                        '`+1000` -> :regional_indicator_a:에 1000xp 베팅\n' + 
+                        '`-2000` -> :regional_indicator_b:에 2000xp 베팅\n' + 
+                        '`0` -> 베팅취소'
                 },
                 {
                     'name' : '진행현황',
@@ -182,46 +198,32 @@ class Core(DBCog):
         })
         await TotoMessage.edit(content = None, embed = embed)
 
-    def get_field_text(self, _dict, guild):
-        cnt = len(_dict)
-        if cnt == 0: return '총 베팅 : 0명 - 0xp'
-        net = mx = mxcnt = 0
-        mxid = None
-        for key in _dict:
-            net += _dict[key]
-            mx = max([_dict[key], mx])
-        for key in _dict:
-            if _dict[key] == mx:
-                mxcnt += 1
-                if mxid == None: mxid = key
-        mxstr = f'{self.GetDisplayName(guild.get_member(mxid))}'
-        if mxcnt > 1: mxstr += f' 외 {mxcnt - 1}명'
-        return f'총 베팅 : {cnt}명 - {net}xp\n최대 베팅 : {mxstr} - {mx}xp'
+    def get_field_text(self, index, guild):
+        cnt = len(self.toto.bet[index])
+        res = f'총 베팅 : {cnt}명 - {self.toto.gettot(index)}xp'
+        if cnt > 0:
+            maxwho, maxbet = self.toto.getmax(index)
+            res += f'\n최대 베팅 : {maxwho} - {maxbet}xp'
+        prop = self.toto.getprop(index)
+        if prop >= 0: res += '\n배당률 : %.2f'%(prop + 1)
+        return res
 
     @commands.command(name = 'endtoto')
     @commands.has_guild_permissions(administrator = True)
     async def EndToto(self, ctx, result):
         await ctx.message.delete()
-        windict, losedict = self.toto.abet, self.toto.bbet
-        if result == 'B': windict, losedict = losedict, windict
-        ltot = wtot = wmax = mxcnt = 0
-        mxid = None
-        for loser in losedict:
-            self.DB['xps'][loser] -= losedict[loser]
-            ltot += losedict[loser]
-        for winner in windict:
-            wtot += windict[winner]
-            wmax = max([wmax, windict[winner]])
-        for winner in windict:
-            if windict[winner] == wmax:
-                mxcnt += 1
-                if mxid == None: mxid = winner
-        mxstr = f'{self.GetDisplayName(ctx.guild.get_member(mxid))}'
-        if mxcnt > 1: mxstr += f' 외 {mxcnt - 1}명'
-        prop = ltot / wtot
-        for winner in windict: self.DB['xps'][winner] += int(windict[winner] * prop)
-        embed = discord.Embed(title = self.toto.title, description = '토토가 종료되었습니다!')
-        embed.add_field(name = '토토 결과', value = f'{result} 승리!\n{len(windict)}명의 참가자가 {int(prop * 1000) / 10}% 이득을 보았습니다!')
-        embed.add_field(name = '최대 수익', value = f'{mxstr} - {int(wmax * prop)}xp를 얻었습니다!')
+        winindex = int(result in ('b', 'B'))
+        winners, losers = self.toto.bet[::[1, -1][winindex]]
+        for loser in losers: self.DB['xps'][loser] -= losers[loser]
+        prop = self.toto.getprop(winindex)
+        if prop < 0:
+            embed = discord.Embed(title = self.toto.title, description = '토토가 종료되었습니다!')
+            embed.add_field(name = '토토 결과', value = f'{result} 승리!\n아무도 돈을 얻지 못했습니다!')
+        else:
+            for winner in winners: self.DB['xps'][winner] += int(winners[winner] * prop)
+            embed = discord.Embed(title = self.toto.title, description = '토토가 종료되었습니다!')
+            embed.add_field(name = '토토 결과', value = f'{result} 승리!\n{len(winners)}명의 참가자가 건 돈의 %.2f배 이득을 보았습니다!'%(prop + 1))
+            maxwho, maxbet = self.toto.getmax(winindex)
+            embed.add_field(name = '최대 수익', value = f'{maxwho} - {int(maxbet * prop)}xp를 얻었습니다!')
         await ctx.send(embed = embed)
         del(self.toto)
