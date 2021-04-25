@@ -43,8 +43,8 @@ class Core(DBCog):
         if ctx.guild.id != GlobalDB['StoryGuildID']: return
         await ctx.message.delete()
         Category = ctx.guild.get_channel(int(CategoryID))
-        RankChannel = await Category.create_text_channel('rank')
-        TotoChannel = await Category.create_text_channel('toto')
+        RankChannel = await Category.create_text_channel('랭크확인')
+        TotoChannel = await Category.create_text_channel('토토')
         self.DB['RankChannel'] = RankChannel.id
         self.DB['TotoChannel'] = TotoChannel.id
         MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
@@ -54,6 +54,7 @@ class Core(DBCog):
     @commands.command(name = 'rank')
     async def GetRank(self, ctx):
         if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        if ctx.channel.id != self.DB['RankChannel']: return
         await ctx.message.delete()
         if ctx.author.id in self.DB['xps']: xp = self.DB['xps'][ctx.author.id]
         else: xp = 0
