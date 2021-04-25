@@ -27,7 +27,7 @@ class Core(DBCog):
         self.DB['Cooldown'] = dict()
 
     def rank2xp(self, rank):
-        return 5 / 3 * rank ** 3 + 45 / 2 * rank ** 2 + 455 / 6 * rank
+        return (10 * rank ** 3 + 135 * rank ** 2 + 455 * rank) // 6
 
     def xp2rank(self, xp):
         l, r = 0, 1001
@@ -58,10 +58,13 @@ class Core(DBCog):
         await ctx.message.delete()
         if ctx.author.id in self.DB['xps']: xp = self.DB['xps'][ctx.author.id]
         else: xp = 0
-        rank = self.xp2rank(xp)
-        tonext = self.rank2xp(rank + 1) - xp
-        if rank < 1000: await ctx.send(f'<@{ctx.author.id}>님은 {xp // 100 / 10}k 경험치로 {rank}레벨입니다! {rank + 1} 레벨까지 {tonext} 경험치 남았습니다!', delete_after = 10.0)
-        else: await ctx.send(f'<@{ctx.author.id}>님은 {rank}레벨입니다! 만렙이네요!ㄷㄷ', delete_after = 10.0)
+        level = self.xp2rank(xp)
+        tonext = self.rank2xp(level + 1) - xp
+        rank = 0
+        for key in self.DB['xps']:
+            if self.DB['xps'][key] > xp: rank += 1
+        if rank < 1000: await ctx.send(f'<@{ctx.author.id}>님은 {xp // 100 / 10}k 경험치로 {level}레벨 {rank}등입니다! {level + 1} 레벨까지 {tonext} 경험치 남았습니다!', delete_after = 10.0)
+        else: await ctx.send(f'<@{ctx.author.id}>님은 {level}레벨 {rank}등입니다! 만렙이네요!ㄷㄷ', delete_after = 10.0)
 
     @commands.command(name = 'givexp')
     @commands.has_guild_permissions(administrator = True)
