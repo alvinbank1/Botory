@@ -3,6 +3,8 @@ from discord.ext import commands, tasks
 from pkgs.DBCog import DBCog
 from pkgs.GlobalDB import GlobalDB
 from pkgs.Scheduler import Schedule
+from PIL import Image, ImageDraw, ImageFont
+import requests, os
 
 class Toto:
     def __init__(self, title, desc, team0, team1, guild, cog):
@@ -38,6 +40,7 @@ class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'Rank'
         DBCog.__init__(self, app)
+        self.TopRankMessage = None
 
     def initDB(self):
         self.DB = dict()
@@ -46,14 +49,14 @@ class Core(DBCog):
         self.DB['xps'] = dict()
         self.DB['Cooldown'] = dict()
 
-    def rank2xp(self, rank):
+    def level2xp(self, rank):
         return (10 * rank ** 3 + 135 * rank ** 2 + 455 * rank) // 6
 
-    def xp2rank(self, xp):
+    def xp2level(self, xp):
         l, r = 0, 1001
         while r - l > 1:
             mid = (l + r) // 2
-            if xp < self.rank2xp(mid): r = mid
+            if xp < self.level2xp(mid): r = mid
             else: l = mid
         return l
 
@@ -78,13 +81,79 @@ class Core(DBCog):
         await ctx.message.delete()
         if ctx.author.id in self.DB['xps']: xp = self.DB['xps'][ctx.author.id]
         else: xp = 0
-        level = self.xp2rank(xp)
-        tonext = self.rank2xp(level + 1) - xp
-        rank = 0
+        level = self.xp2level(xp)
+        tonext = self.level2xp(level + 1) - xp
+        rank = 1
         for key in self.DB['xps']:
             if self.DB['xps'][key] > xp: rank += 1
         if rank < 1000: await ctx.send(f'<@{ctx.author.id}>님은 {xp // 100 / 10}k 경험치로 {level}레벨 {rank}등입니다! {level + 1} 레벨까지 {tonext} 경험치 남았습니다!', delete_after = 10.0)
         else: await ctx.send(f'<@{ctx.author.id}>님은 {level}레벨 {rank}등입니다! 만렙이네요!ㄷㄷ', delete_after = 10.0)
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        self.TopRankMsg.start()
+
+    @tasks.loop(minutes = 1)
+    async def TopRankMsg(self):
+        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
+        RankChannel = guild.get_channel(self.DB['RankChannel'])
+        img = self.makerankimg()
+        img.save('tmp.png')
+        with open('tmp.png', 'rb') as fp:
+            if self.TopRankMessage: await self.TopRankMessage.delete()
+            self.TopRankMessage = await RankChannel.send(file = discord.File(fp))
+        os.remove('tmp.png')
+
+    def makerankimg(self):
+        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
+        lst = []
+        for key in self.DB['xps']: lst.append([self.DB['xps'][key], key])
+        lst.sort(reverse = True)
+        if len(lst) > 20: lst = lst[:20]
+        res = Image.new("RGB", (1480 * 2 + 20, 280 * 10 + 20), (50, 50, 50))
+        for i in range(len(lst)):
+            whoid = lst[i][1]
+            who = guild.get_member(whoid)
+            level = self.xp2level(lst[i][0])
+            if level == 1000: prop = 1
+            else: prop = (lst[i][0] - self.level2xp(level)) / (self.level2xp(level + 1) - self.level2xp(level))
+            one = self._makerankone(self.GetDisplayName(who), lst[i][0], i + 1, level, prop, who.avatar_url)
+            res.paste(one, ((i // 10) * 1480, (i % 10) * 280))
+        return res
+
+    def _makerankone(self, who, exp, rank, level, prop, url):
+        res = Image.new("RGB", (1500, 300), (50, 50, 50))
+        canvas = ImageDraw.Draw(res)
+        canvas.rectangle((0, 0, 1500, 300), outline = (70, 70, 70), width = 20)
+        canvas.ellipse((1269, 69, 1431, 231), width = 6, outline = (80, 80, 80))
+        canvas.text((1350, 120), 'LEVEL', font = ImageFont.truetype('NanumGothic.ttf', 30), fill = (140, 140, 140), align = 'center', anchor = 'mm')
+        canvas.text((1110, 120), 'EXP', font = ImageFont.truetype('NanumGothic.ttf', 30), fill = (140, 140, 140), align = 'center', anchor = 'mm')
+
+        if rank < 4: rankcolor = [(212, 175, 55), (208, 208, 208), (138, 84, 30)][rank - 1]
+        else: rankcolor = (100, 100, 100)
+        darkercolor = tuple(c - 20 for c in rankcolor)
+        canvas.ellipse((75, 75, 225, 225), fill = rankcolor, width = 12, outline = darkercolor)
+        if prop < 1:
+            canvas.arc((1269, 69, 1431, 231), start = 270, end = int(270 + prop * 360) % 360, width = 6, fill = rankcolor if rank < 4 else (200, 200, 200))
+        else: canvas.ellipse((1269, 69, 1431, 231), width = 6, outline = (255, 0, 0))
+        canvas.text((150, 150), str(rank), font = ImageFont.truetype('NanumGothic.ttf', 90), fill = (255, 255, 255),
+            anchor = 'mm', stroke_width = 4, stroke_fill = (0, 0, 0))
+     
+        if len(who) > 9: who = who[:8] + '...'
+        if level == 1000: level = 'MAX'
+        else: level = str(level)
+        canvas.text((450, 150), who, font = ImageFont.truetype('NanumGothic.ttf', 60), fill = (255, 255, 255), anchor = 'lm')
+        canvas.text((1350, 165), level, font = ImageFont.truetype('NanumGothic.ttf', 48), fill = (255, 255, 255), align = 'center', anchor = 'mm')
+        canvas.text((1110, 165), '%.1fk'%(exp / 1000), font = ImageFont.truetype('NanumGothic.ttf', 48), fill = (255, 255, 255), anchor = 'mm')
+
+        res.convert('RGBA')
+        profile = Image.open(requests.get(url, stream=True).raw)
+        profile = profile.resize((120, 120))
+        mask = Image.new('L', (120, 120), 0)
+        mcanvas = ImageDraw.Draw(mask)
+        mcanvas.ellipse((0, 0, 120, 120), fill = 255)
+        res.paste(profile, (300, 90), mask = mask)
+        return res
 
     @commands.command(name = 'givexp')
     @commands.has_guild_permissions(administrator = True)
@@ -154,13 +223,14 @@ class Core(DBCog):
         TotoChannel, msg = message.channel, message
         try: val = int(msg.content)
         except: return
-        if msg.author.id not in self.DB['xps'] or abs(val) > self.DB['xps'][msg.author.id]:
-            await TotoChannel.send(f'<@{msg.author.id}>님 xp가 부족하여 베팅 취소되었습니다.', delete_after = 3.0)
-            return
         if val == 0:
             for i in range(2):
                 if msg.author.id in self.toto.bet[i]: del(self.toto.bet[i][msg.author.id])
             await TotoChannel.send(f'<@{msg.author.id}>님 베팅 취소되었습니다.', delete_after = 3.0)
+            return
+        if msg.author.id not in self.DB['xps'] or abs(val) > self.DB['xps'][msg.author.id]:
+            await TotoChannel.send(f'<@{msg.author.id}>님 xp가 부족하여 베팅 취소되었습니다.', delete_after = 3.0)
+            return
         val, index = abs(val), int(val < 0)
         if msg.author.id in self.toto.bet[1 - index]: del(self.toto.bet[1 - index][msg.author.id])
         self.toto.bet[index][msg.author.id] = val
