@@ -114,6 +114,7 @@ class Core(DBCog):
         for i in range(len(lst)):
             whoid = lst[i][1]
             who = guild.get_member(whoid)
+            if who == None: continue
             level = self.xp2level(lst[i][0])
             if level == 1000: prop = 1
             else: prop = (lst[i][0] - self.level2xp(level)) / (self.level2xp(level + 1) - self.level2xp(level))
