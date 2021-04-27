@@ -109,17 +109,18 @@ class Core(DBCog):
         lst = []
         for key in self.DB['xps']: lst.append([self.DB['xps'][key], key])
         lst.sort(reverse = True)
-        if len(lst) > 20: lst = lst[:20]
         res = Image.new("RGB", (1480 * 2 + 20, 280 * 10 + 20), (50, 50, 50))
-        for i in range(len(lst)):
-            whoid = lst[i][1]
-            who = guild.get_member(whoid)
+        i = 0
+        for elem in lst:
+            if i > 19: break
+            who = guild.get_member(elem[1])
             if who == None: continue
-            level = self.xp2level(lst[i][0])
+            level = self.xp2level(elem[0])
             if level == 1000: prop = 1
-            else: prop = (lst[i][0] - self.level2xp(level)) / (self.level2xp(level + 1) - self.level2xp(level))
-            one = self._makerankone(self.GetDisplayName(who), lst[i][0], i + 1, level, prop, who.avatar_url)
+            else: prop = (elem[0] - self.level2xp(level)) / (self.level2xp(level + 1) - self.level2xp(level))
+            one = self._makerankone(self.GetDisplayName(who), elem[0], i + 1, level, prop, who.avatar_url)
             res.paste(one, ((i // 10) * 1480, (i % 10) * 280))
+            i += 1
         return res
 
     def _makerankone(self, who, exp, rank, level, prop, url):
@@ -296,5 +297,13 @@ class Core(DBCog):
             embed.add_field(name = '토토 결과', value = f'{result} 승리!\n{len(winners)}명의 참가자가 건 돈의 %.2f배 이득을 보았습니다!'%(prop + 1))
             maxwho, maxbet = self.toto.getmax(winindex)
             embed.add_field(name = '최대 수익', value = f'{maxwho} - {int(maxbet * prop)}xp를 얻었습니다!')
+        await ctx.send(embed = embed)
+        del(self.toto)
+
+    @commands.command(name = 'canceltoto')
+    @commands.has_guild_permissions(administrator = True)
+    async def CancelToto(self, ctx):
+        await ctx.message.delete()
+        embed = discord.Embed(title = self.toto.title, description = '토토가 취소되었습니다!')
         await ctx.send(embed = embed)
         del(self.toto)
