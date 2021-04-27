@@ -75,25 +75,28 @@ class Core(DBCog):
         await TotoChannel.set_permissions(MemberRole, read_messages = True, send_messages = False, add_reactions = False)
 
     @commands.command(name = 'rank')
-    async def GetRank(self, ctx):
+    async def GetRank(self, ctx, arg = None):
         if ctx.guild.id != GlobalDB['StoryGuildID']: return
         if ctx.channel.id != self.DB['RankChannel']: return
         await ctx.message.delete()
-        if ctx.author.id in self.DB['xps']: xp = self.DB['xps'][ctx.author.id]
+        who = ctx.author
+        if arg and ctx.author.guild_permissions.administrator: who = self.mention2member(arg, ctx.guild)
+        if who.id in self.DB['xps']: xp = self.DB['xps'][who.id]
         else: xp = 0
         level = self.xp2level(xp)
         tonext = self.level2xp(level + 1) - xp
         rank = 1
         for key in self.DB['xps']:
             if self.DB['xps'][key] > xp: rank += 1
-        if rank < 1000: await ctx.send(f'<@{ctx.author.id}>님은 {xp // 100 / 10}k 경험치로 {level}레벨 {rank}등입니다! {level + 1} 레벨까지 {tonext} 경험치 남았습니다!', delete_after = 10.0)
-        else: await ctx.send(f'<@{ctx.author.id}>님은 {level}레벨 {rank}등입니다! 만렙이네요!ㄷㄷ', delete_after = 10.0)
+        if rank < 1000: await ctx.send(f'<@{who.id}>님은 {xp // 100 / 10}k 경험치로 {level}레벨 {rank}등입니다! {level + 1} 레벨까지 {tonext} 경험치 남았습니다!', delete_after = 10.0)
+        else: await ctx.send(f'<@{who.id}>님은 {level}레벨 {rank}등입니다! 만렙이네요!ㄷㄷ', delete_after = 10.0)
 
     @commands.Cog.listener()
     async def on_ready(self):
         self.TopRankMsg.start()
+        self.AutoRole.start()
 
-    @tasks.loop(minutes = 1)
+    @tasks.loop(minutes = 5)
     async def TopRankMsg(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RankChannel = guild.get_channel(self.DB['RankChannel'])
@@ -193,7 +196,8 @@ class Core(DBCog):
         if message.guild.id != GlobalDB['StoryGuildID']: return
         if message.channel.id != self.DB['RankChannel']: return
         if message.author.id == self.app.user.id: return
-        if message.content != '&rank': await message.delete()
+        ctx = await self.app.get_context(message)
+        if not ctx.valid: await message.delete()
 
     @commands.command(name = 'newtoto')
     @commands.has_guild_permissions(administrator = True)
@@ -307,3 +311,17 @@ class Core(DBCog):
         embed = discord.Embed(title = self.toto.title, description = '토토가 취소되었습니다!')
         await ctx.send(embed = embed)
         del(self.toto)
+
+    @tasks.loop(minutes = 5)
+    async def AutoRole(self):
+        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
+        dcRole = discord.utils.get(guild.roles, name = '디창')
+        lst = []
+        for key in self.DB['xps']: lst.append([self.DB['xps'][key], key])
+        for elem in lst:
+            who = guild.get_member(elem[1])
+            if who == None: continue
+            is_dc = self.xp2level(elem[0]) >= 40
+            has_dc = dcRole in who.roles
+            if is_dc and not has_dc: await who.add_roles(dcRole)
+            if not is_dc and has_dc: await who.remove_roles(dcRole)
