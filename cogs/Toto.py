@@ -341,7 +341,7 @@ class Core(DBCog):
 
     @tasks.loop(minutes = 5)
     async def FeverRaid(self):
-        if random.random() >= 1: return
+        if random.random() >= 1 / 12: return
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
         aww = discord.utils.get(guild.emojis, name = 'rage_aww')
