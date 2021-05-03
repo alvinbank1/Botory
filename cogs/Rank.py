@@ -14,9 +14,11 @@ class Core(DBCog):
 
     def initDB(self):
         self.DB = dict()
-        self.DB['RankChannel'] = None
+        self.DB['channel'] = None
         self.DB['xps'] = dict()
-        self.DB['Cooldown'] = dict()
+        self.DB['flag'] = dict()
+        self.DB['dcRole'] = None
+        self.DB['dcPivot'] = None
 
     def level2xp(self, rank):
         return (10 * rank ** 3 + 135 * rank ** 2 + 455 * rank) // 6
@@ -32,26 +34,22 @@ class Core(DBCog):
     @commands.command(name = 'ranksetup')
     @commands.has_guild_permissions(administrator = True)
     async def Setup(self, ctx, CategoryID):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
         await ctx.message.delete()
+        if ctx.guild.id != GlobalDB['StoryGuildID']: return
         Category = ctx.guild.get_channel(int(CategoryID))
         RankChannel = await Category.create_text_channel('랭크확인')
-        self.DB['RankChannel'] = RankChannel.id
+        self.DB['channel'] = RankChannel.id
         MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
-        await RankChannel.set_permissions(MemberRole, read_messages = True, add_reactions = False)
+        await RankChannel.edit(sync_permissions = True)
 
     @commands.command(name = 'rank')
     async def GetRank(self, ctx, arg = None):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        if ctx.channel.id != self.DB['RankChannel']: return
         await ctx.message.delete()
+        if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        if ctx.channel.id != self.DB['channel']: return
         who = ctx.author
         if arg and ctx.author.guild_permissions.administrator: who = self.mention2member(arg, ctx.guild)
-        if who.id in self.DB['xps']: xp = self.DB['xps'][who.id]
-        else: xp = 0
-        level = self.xp2level(xp)
-        tonext = self.level2xp(level + 1) - xp
-        img = self._makerankone(who, xp)
+        img = self._makerankone(who)
         imgname = uuid.uuid4().hex + '.png'
         img.save(imgname)
         with open(imgname, 'rb') as fp:
@@ -66,13 +64,16 @@ class Core(DBCog):
     @tasks.loop(minutes = 5)
     async def TopRankMsg(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        RankChannel = guild.get_channel(self.DB['RankChannel'])
+        RankChannel = guild.get_channel(self.DB['channel'])
+        if RankChannel == None: return
         img = self.makerankimg()
-        img.save('tmp.png')
-        with open('tmp.png', 'rb') as fp:
-            if self.TopRankMessage: await self.TopRankMessage.delete()
+        imgname = uuid.uuid4().hex + '.png'
+        img.save(imgname)
+        with open(imgname, 'rb') as fp:
+            try: await self.TopRankMessage.delete()
+            except: pass
             self.TopRankMessage = await RankChannel.send(file = discord.File(fp))
-        os.remove('tmp.png')
+        os.remove(imgname)
 
     def makerankimg(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
@@ -85,12 +86,14 @@ class Core(DBCog):
             if i > 19: break
             who = guild.get_member(elem[1])
             if who == None: continue
-            one = self._makerankone(who, elem[0], i + 1) 
+            one = self._makerankone(who, i + 1) 
             res.paste(one, ((i // 10) * 1480, (i % 10) * 280))
             i += 1
         return res
 
-    def _makerankone(self, who, xp, rank = None):
+    def _makerankone(self, who, rank = None):
+        xp = 0
+        if who.id in self.DB['xps']: xp = self.DB['xps'][who.id]
         if rank == None: 
             rank = 1
             for key in self.DB['xps']:
@@ -136,8 +139,8 @@ class Core(DBCog):
     @commands.command(name = 'givexp')
     @commands.has_guild_permissions(administrator = True)
     async def GiveXP(self, ctx, who, val):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
         await ctx.message.delete()
+        if ctx.guild.id != GlobalDB['StoryGuildID']: return
         who = self.mention2member(who, ctx.guild)
         if who.id not in self.DB['xps']: self.DB['xps'][who.id] = 0
         self.DB['xps'][who.id] += int(val)
@@ -145,8 +148,8 @@ class Core(DBCog):
     @commands.command(name = 'takexp')
     @commands.has_guild_permissions(administrator = True)
     async def TakeXP(self, ctx, who, val):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
         await ctx.message.delete()
+        if ctx.guild.id != GlobalDB['StoryGuildID']: return
         who = self.mention2member(who, ctx.guild)
         if who.id not in self.DB['xps']: self.DB['xps'][who.id] = 0
         self.DB['xps'][who.id] -= int(val)
@@ -156,32 +159,47 @@ class Core(DBCog):
     async def messageXP(self, message):
         if message.guild.id != GlobalDB['StoryGuildID']: return
         if message.author.bot: return
-        if message.channel.id == self.DB['RankChannel']: return
+        if message.channel.id == self.DB['channel']: return
         whoid = message.author.id
-        if whoid not in self.DB['Cooldown']: self.DB['Cooldown'][whoid] = Schedule('0s')
-        if self.DB['Cooldown'][whoid].is_done():
+        if whoid not in self.DB['flag']: self.DB['flag'][whoid] = Schedule('0s')
+        if self.DB['flag'][whoid].is_done():
             if whoid not in self.DB['xps']: self.DB['xps'][whoid] = 0
             self.DB['xps'][whoid] += 20
-            self.DB['Cooldown'][whoid] = Schedule('1m')
+            self.DB['flag'][whoid] = Schedule('1m')
 
     @commands.Cog.listener('on_message')
     async def nomsginrank(self, message):
         if message.guild.id != GlobalDB['StoryGuildID']: return
-        if message.channel.id != self.DB['RankChannel']: return
+        if message.channel.id != self.DB['channel']: return
         if message.author.id == self.app.user.id: return
         ctx = await self.app.get_context(message)
         if not ctx.valid: await message.delete()
 
+    @commands.command(name = 'setdcrole')
+    @commands.has_guild_permissions(administrator = True)
+    async def SetRole(self, ctx, role, val):
+        await ctx.message.delete()
+        if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        role = self.mention2role(role, ctx.guild)
+        self.DB['dcRole'] = role.id
+        self.DB['dcPivot'] = int(val)
+
     @tasks.loop(minutes = 5)
     async def AutoRole(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        dcRole = discord.utils.get(guild.roles, name = '디창')
+        dcRole = guild.get_role(self.DB['dcRole'])
+        if dcRole == None: return
         lst = []
         for key in self.DB['xps']: lst.append([self.DB['xps'][key], key])
+        lst.sort(reverse = True)
+        if lst: lst[0].append(1)
+        for i in range(1, len(lst)):
+            lst[i].append(lst[i - 1][2])
+            if lst[i - 1][0] > lst[i][0]: lst[i][2] += 1
         for elem in lst:
             who = guild.get_member(elem[1])
             if who == None: continue
-            is_dc = self.xp2level(elem[0]) >= 40
+            is_dc = elem[2] <= self.DB['dcPivot']
             has_dc = dcRole in who.roles
             if is_dc and not has_dc: await who.add_roles(dcRole)
             if not is_dc and has_dc: await who.remove_roles(dcRole)
