@@ -363,5 +363,6 @@ class Core(DBCog):
     async def onRaidReaction(self, reaction, user):
         if not self.on_raid: return
         if reaction.message != self.RaidMessage: return
+        if user.bot: return
         if reaction.emoji.name != 'rage_aww': return
         self.raiders.add(user)
