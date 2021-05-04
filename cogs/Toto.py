@@ -5,6 +5,7 @@ from pkgs.GlobalDB import GlobalDB
 from pkgs.Scheduler import Schedule
 from PIL import Image, ImageDraw, ImageFont
 import random, uuid, os, asyncio, requests
+from datetime import datetime, timedelta
 
 class Toto:
     def __init__(self, title, desc, team0, team1, guild, cog):
@@ -41,6 +42,7 @@ class Core(DBCog):
         self.CogName = 'Toto'
         DBCog.__init__(self, app)
         self.TopRankMessage = None
+        self.LastRaid = None
 
     def initDB(self):
         self.DB = dict()
@@ -341,14 +343,19 @@ class Core(DBCog):
 
     @tasks.loop(minutes = 5)
     async def FeverRaid(self):
-        if random.random() >= 1 / 12: return
+        if random.random() >= 1 / 10: return
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
         aww = discord.utils.get(guild.emojis, name = 'rage_aww')
         if RaidChannel == None: return
+        prize = 500
+        if self.LastRaid:
+            hdelta = (self.LastRaid - datetime.now()).total_seconds() / 3600
+            prize = int(hdelta * 1000)
+            prize = max([500, prize])
         self.RaidMessage = await RaidChannel.send(embed = discord.Embed(
             title = '도토리 레이드 도착!',
-            description = '10초 안에 아래 이모지를 눌러서 도토리 1000개를 받으세요!'))
+            description = f'10초 안에 아래 이모지를 눌러서 도토리 {prize}개를 받으세요!'))
         await self.RaidMessage.add_reaction(aww)
         self.raiders = set()
         self.on_raid = True
@@ -357,7 +364,7 @@ class Core(DBCog):
         await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = ''))
         for user in self.raiders:
             if user.id not in self.DB['mns']: self.DB['mns'][user.id] = 0
-            self.DB['mns'][user.id] += 1000
+            self.DB['mns'][user.id] += prize
 
     @commands.Cog.listener('on_reaction_add')
     async def onRaidReaction(self, reaction, user):
