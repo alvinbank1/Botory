@@ -341,7 +341,7 @@ class Core(DBCog):
             if is_rich and not has_rich: await who.add_roles(RichRole)
             if not is_rich and has_rich: await who.remove_roles(RichRole)
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 3)
     async def FeverRaid(self):
         if random.random() >= 1 / 10: return
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
@@ -350,18 +350,23 @@ class Core(DBCog):
         if RaidChannel == None: return
         prize = 500
         if self.LastRaid:
-            hdelta = (self.LastRaid - datetime.now()).total_seconds() / 3600
+            hdelta = (datetime.now() - self.LastRaid).total_seconds() / 3600
             prize = int(hdelta * 1000)
             prize = max([500, prize])
         self.RaidMessage = await RaidChannel.send(embed = discord.Embed(
             title = '도토리 레이드 도착!',
-            description = f'10초 안에 아래 이모지를 눌러서 도토리 {prize}개를 받으세요!'))
+            description = f'15초 안에 아래 이모지를 눌러서 도토리 {prize}개를 받으세요!'))
         await self.RaidMessage.add_reaction(aww)
         self.raiders = set()
         self.on_raid = True
-        await asyncio.sleep(10)
+        await asyncio.sleep(15)
         self.on_raid = False
-        await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = ''))
+        desc = ''
+        for raider in self.raiders:
+            dispname = self.GetDisplayName(raider)
+            desc += dispname + ', '
+        desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
+        await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
         for user in self.raiders:
             if user.id not in self.DB['mns']: self.DB['mns'][user.id] = 0
             self.DB['mns'][user.id] += prize
