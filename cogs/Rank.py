@@ -61,7 +61,7 @@ class Core(DBCog):
         self.TopRankMsg.start()
         self.AutoRole.start()
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RankChannel = guild.get_channel(self.DB['channel'])

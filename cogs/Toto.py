@@ -199,7 +199,7 @@ class Core(DBCog):
         self.AutoRole.start()
         self.FeverRaid.start()
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RankChannel = guild.get_channel(self.DB['BankChannel'])
@@ -321,7 +321,7 @@ class Core(DBCog):
         ctx = await self.app.get_context(message)
         if not ctx.valid: await message.delete()
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 10)
     async def AutoRole(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RichRole = guild.get_role(self.DB['RichRole'])
@@ -360,6 +360,7 @@ class Core(DBCog):
         self.raiders = set()
         self.on_raid = True
         await asyncio.sleep(15)
+        self.LastRaid = datetime.now()
         self.on_raid = False
         desc = ''
         for raider in self.raiders:
