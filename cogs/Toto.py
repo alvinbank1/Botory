@@ -90,6 +90,7 @@ class Core(DBCog):
         self.updateembed.cancel()
         await self.updateembed(TotoMessage)
         embed = TotoMessage.embeds[0]
+        await ctx.send(f'새로운 토토가 <#{self.DB["TotoChannel"]}>에서 시작되었습니다!')
 
     @commands.Cog.listener('on_message')
     async def getbet(self, message):
@@ -233,8 +234,10 @@ class Core(DBCog):
         money = 0
         if who.id in self.DB['mns']: money = self.DB['mns'][who.id]
         if rank == None: 
+            guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
             rank = 1
             for key in self.DB['mns']:
+                if guild.get_member(key) == None: continue
                 if self.DB['mns'][key] > money: rank += 1
 
         res = Image.new("RGB", (1500, 300), (50, 50, 50))
@@ -346,6 +349,7 @@ class Core(DBCog):
         if random.random() >= 1 / 10: return
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
+        if (await self.RaidChannel.fetch_message(self.RaidChannel.last_message_id)).author.bot: return
         aww = discord.utils.get(guild.emojis, name = 'rage_aww')
         if RaidChannel == None: return
         prize = 500
@@ -367,6 +371,9 @@ class Core(DBCog):
             dispname = self.GetDisplayName(raider)
             desc += dispname + ', '
         desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
+        if len(self.raiders) == 0:
+            if prize < 1000: f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
+            else: f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
         await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
         for user in self.raiders:
             if user.id not in self.DB['mns']: self.DB['mns'][user.id] = 0
