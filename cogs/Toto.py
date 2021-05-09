@@ -5,6 +5,7 @@ from pkgs.GlobalDB import GlobalDB
 from pkgs.Scheduler import Schedule
 from PIL import Image, ImageDraw, ImageFont
 import random, uuid, os, asyncio, requests
+from datetime import datetime, timedelta
 
 class Toto:
     def __init__(self, title, desc, team0, team1, guild, cog):
@@ -41,6 +42,7 @@ class Core(DBCog):
         self.CogName = 'Toto'
         DBCog.__init__(self, app)
         self.TopRankMessage = None
+        self.LastRaid = None
 
     def initDB(self):
         self.DB = dict()
@@ -88,6 +90,7 @@ class Core(DBCog):
         self.updateembed.cancel()
         await self.updateembed(TotoMessage)
         embed = TotoMessage.embeds[0]
+        await ctx.send(f'새로운 토토가 <#{self.DB["TotoChannel"]}>에서 시작되었습니다!')
 
     @commands.Cog.listener('on_message')
     async def getbet(self, message):
@@ -197,7 +200,7 @@ class Core(DBCog):
         self.AutoRole.start()
         self.FeverRaid.start()
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RankChannel = guild.get_channel(self.DB['BankChannel'])
@@ -231,8 +234,10 @@ class Core(DBCog):
         money = 0
         if who.id in self.DB['mns']: money = self.DB['mns'][who.id]
         if rank == None: 
+            guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
             rank = 1
             for key in self.DB['mns']:
+                if guild.get_member(key) == None: continue
                 if self.DB['mns'][key] > money: rank += 1
 
         res = Image.new("RGB", (1500, 300), (50, 50, 50))
@@ -319,7 +324,7 @@ class Core(DBCog):
         ctx = await self.app.get_context(message)
         if not ctx.valid: await message.delete()
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 10)
     async def AutoRole(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RichRole = guild.get_role(self.DB['RichRole'])
@@ -339,25 +344,40 @@ class Core(DBCog):
             if is_rich and not has_rich: await who.add_roles(RichRole)
             if not is_rich and has_rich: await who.remove_roles(RichRole)
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 3)
     async def FeverRaid(self):
-        if random.random() >= 1 / 12: return
+        if random.random() >= 1 / 10: return
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
+        if (await self.RaidChannel.fetch_message(self.RaidChannel.last_message_id)).author.bot: return
         aww = discord.utils.get(guild.emojis, name = 'rage_aww')
         if RaidChannel == None: return
+        prize = 500
+        if self.LastRaid:
+            hdelta = (datetime.now() - self.LastRaid).total_seconds() / 3600
+            prize = int(hdelta * 1000)
+            prize = max([500, prize])
         self.RaidMessage = await RaidChannel.send(embed = discord.Embed(
             title = '도토리 레이드 도착!',
-            description = '10초 안에 아래 이모지를 눌러서 도토리 1000개를 받으세요!'))
+            description = f'15초 안에 아래 이모지를 눌러서 도토리 {prize}개를 받으세요!'))
         await self.RaidMessage.add_reaction(aww)
         self.raiders = set()
         self.on_raid = True
-        await asyncio.sleep(10)
+        await asyncio.sleep(15)
+        self.LastRaid = datetime.now()
         self.on_raid = False
-        await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = ''))
+        desc = ''
+        for raider in self.raiders:
+            dispname = self.GetDisplayName(raider)
+            desc += dispname + ', '
+        desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
+        if len(self.raiders) == 0:
+            if prize < 1000: f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
+            else: f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
+        await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
         for user in self.raiders:
             if user.id not in self.DB['mns']: self.DB['mns'][user.id] = 0
-            self.DB['mns'][user.id] += 1000
+            self.DB['mns'][user.id] += prize
 
     @commands.Cog.listener('on_reaction_add')
     async def onRaidReaction(self, reaction, user):

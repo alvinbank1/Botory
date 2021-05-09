@@ -61,7 +61,7 @@ class Core(DBCog):
         self.TopRankMsg.start()
         self.AutoRole.start()
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RankChannel = guild.get_channel(self.DB['channel'])
@@ -95,8 +95,10 @@ class Core(DBCog):
         xp = 0
         if who.id in self.DB['xps']: xp = self.DB['xps'][who.id]
         if rank == None: 
+            guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
             rank = 1
             for key in self.DB['xps']:
+                if guild.get_member(key) == None: continue
                 if self.DB['xps'][key] > xp: rank += 1
         level = self.xp2level(xp)
         if level == 1000: prop = 1
@@ -184,7 +186,7 @@ class Core(DBCog):
         self.DB['dcRole'] = role.id
         self.DB['dcPivot'] = int(val)
 
-    @tasks.loop(minutes = 5)
+    @tasks.loop(minutes = 10)
     async def AutoRole(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         dcRole = guild.get_role(self.DB['dcRole'])
