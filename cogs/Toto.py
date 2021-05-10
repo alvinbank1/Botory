@@ -81,6 +81,7 @@ class Core(DBCog):
         MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
         await TotoChannel.set_permissions(MemberRole, read_messages = True, send_messages = True)
         self.toto.on_bet = True
+        await ctx.send(f'새로운 토토가 <#{self.DB["TotoChannel"]}>에서 시작되었습니다!')
         self.updateembed.start(TotoMessage)
         def check(message):
             return message.channel == TotoChannel and message.author.guild_permissions.administrator and message.content == 'stopbet'
@@ -89,8 +90,6 @@ class Core(DBCog):
         self.toto.on_bet = False
         self.updateembed.cancel()
         await self.updateembed(TotoMessage)
-        embed = TotoMessage.embeds[0]
-        await ctx.send(f'새로운 토토가 <#{self.DB["TotoChannel"]}>에서 시작되었습니다!')
 
     @commands.Cog.listener('on_message')
     async def getbet(self, message):
@@ -346,12 +345,12 @@ class Core(DBCog):
 
     @tasks.loop(minutes = 3)
     async def FeverRaid(self):
-        if random.random() >= 1 / 10: return
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
-        if (await self.RaidChannel.fetch_message(self.RaidChannel.last_message_id)).author.bot: return
-        aww = discord.utils.get(guild.emojis, name = 'rage_aww')
         if RaidChannel == None: return
+        if (await RaidChannel.fetch_message(RaidChannel.last_message_id)).author.bot: return
+        if random.random() >= 1 / 10: return
+        aww = discord.utils.get(guild.emojis, name = 'rage_aww')
         prize = 500
         if self.LastRaid:
             hdelta = (datetime.now() - self.LastRaid).total_seconds() / 3600
