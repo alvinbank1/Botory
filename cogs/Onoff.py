@@ -22,7 +22,7 @@ class Core(DBCog):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])
         if self.DB['StopChannel']:
             StopChannel = guild.get_channel(self.DB['StopChannel'])
-            await StopChannel.send(f'보토리 {version}{" 시험가동" if is_test else ""}을 시작합니다.')
+            await StopChannel.send(f'보토리 {version}{"(testing)" if is_test else ""} is back.')
         self.MemberRole = discord.utils.get(guild.roles, name = '멤버')
         perms = self.MemberRole.permissions
         perms.update(add_reactions = True, attach_files = True)
