@@ -2,18 +2,27 @@ import discord, asyncio
 from pkgs.DBCog import DBCog
 from pkgs.GlobalDB import GlobalDB
 from discord.ext import commands
+import sys
 
 class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'OnOff'
         DBCog.__init__(self, app)
 
-    def initDB(self): self.DB = dict()
+    def initDB(self):
+        self.DB = dict()
+        self.DB['StopChannel'] = None
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await self.app.change_presence(activity = discord.Game('Botory 2.7.3 by Undec'))
+        version = '2.7.3'
+        is_test = False
+        if len(sys.argv) > 1 and sys.argv[1] == '-t': is_test = True
+        await self.app.change_presence(activity = discord.Game(f'Botory {version}{" testing" if is_test else ""} by Undec'))
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])
+        if self.DB['StopChannel']:
+            StopChannel = guild.get_channel(self.DB['StopChannel'])
+            await StopChannel.send(f'보토리 {version}{" 시험가동" if is_test else ""}을 시작합니다.')
         self.MemberRole = discord.utils.get(guild.roles, name = '멤버')
         perms = self.MemberRole.permissions
         perms.update(add_reactions = True, attach_files = True)
@@ -23,6 +32,7 @@ class Core(DBCog):
     @commands.has_guild_permissions(administrator = True)
     async def StopApp(self, ctx):
         await ctx.message.delete()
+        self.DB['StopChannel'] = ctx.channel.id;
         perms = self.MemberRole.permissions
         perms.update(add_reactions = False, attach_files = False)
         await self.MemberRole.edit(permissions = perms)

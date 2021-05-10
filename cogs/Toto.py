@@ -348,7 +348,9 @@ class Core(DBCog):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
         if RaidChannel == None: return
-        if (await RaidChannel.fetch_message(RaidChannel.last_message_id)).author.bot: return
+        try:
+            if (await RaidChannel.fetch_message(RaidChannel.last_message_id)).author.bot: return
+        except: pass
         if random.random() >= 1 / 10: return
         aww = discord.utils.get(guild.emojis, name = 'rage_aww')
         prize = 500
