@@ -74,6 +74,7 @@ class Core(DBCog):
 
     @TotoGroup.command(name = 'new')
     async def NewToto(self, ctx, title, desc, team0, team1):
+        desc = desc.replace('\\n', '\n')
         self.toto = Toto(title, desc, team0, team1, ctx.guild, self)
         TotoChannel = ctx.guild.get_channel(self.DB['TotoChannel'])
         TotoMessage = await TotoChannel.send('temp')
@@ -94,7 +95,9 @@ class Core(DBCog):
     @commands.Cog.listener('on_message')
     async def getbet(self, message):
         if message.channel.id != self.DB['TotoChannel']: return
-        if not self.toto.on_bet: return
+        try:
+            if not self.toto.on_bet: return
+        except: return
         if message.author.id == self.app.user.id: return
         await message.delete()
         TotoChannel, msg = message.channel, message
@@ -353,11 +356,10 @@ class Core(DBCog):
         except: pass
         if random.random() >= 1 / 10: return
         aww = discord.utils.get(guild.emojis, name = 'rage_aww')
-        prize = 500
+        prize = 2000
         if self.LastRaid:
             hdelta = (datetime.now() - self.LastRaid).total_seconds() / 3600
-            prize = int(hdelta * 1000)
-            prize = max([500, prize])
+            prize = max([int(hdelta * 4000), prize])
         self.RaidMessage = await RaidChannel.send(embed = discord.Embed(
             title = '도토리 레이드 도착!',
             description = f'15초 안에 아래 이모지를 눌러서 도토리 {prize}개를 받으세요!'))
@@ -368,13 +370,14 @@ class Core(DBCog):
         self.LastRaid = datetime.now()
         self.on_raid = False
         desc = ''
-        for raider in self.raiders:
-            dispname = self.GetDisplayName(raider)
-            desc += dispname + ', '
-        desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
         if len(self.raiders) == 0:
             if prize < 1000: f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
             else: f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
+        else:
+            for raider in self.raiders:
+                dispname = self.GetDisplayName(raider)
+                desc += dispname + ', '
+            desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
         await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
         for user in self.raiders:
             if user.id not in self.DB['mns']: self.DB['mns'][user.id] = 0
@@ -382,7 +385,9 @@ class Core(DBCog):
 
     @commands.Cog.listener('on_reaction_add')
     async def onRaidReaction(self, reaction, user):
-        if not self.on_raid: return
+        try:
+            if not self.on_raid: return
+        except: return
         if reaction.message != self.RaidMessage: return
         if user.bot: return
         if reaction.emoji.name != 'rage_aww': return
