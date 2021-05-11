@@ -371,8 +371,8 @@ class Core(DBCog):
         self.on_raid = False
         desc = ''
         if len(self.raiders) == 0:
-            if prize < 1000: f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
-            else: f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
+            if prize < 1000: desc = f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
+            else: desc = f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
         else:
             for raider in self.raiders:
                 dispname = self.GetDisplayName(raider)
