@@ -146,6 +146,8 @@ class Core(DBCog):
         who = self.mention2member(who, ctx.guild)
         if who.id not in self.DB['xps']: self.DB['xps'][who.id] = 0
         self.DB['xps'][who.id] += int(val)
+        embed = discord.Embed(title = '', description = f'<@{who.id}> 님께 {val}xp가 지급되었습니다.')
+        await ctx.channel.send(embed = embed)
 
     @commands.command(name = 'takexp')
     @commands.has_guild_permissions(administrator = True)
@@ -156,6 +158,8 @@ class Core(DBCog):
         if who.id not in self.DB['xps']: self.DB['xps'][who.id] = 0
         self.DB['xps'][who.id] -= int(val)
         if self.DB['xps'][who.id] < 0: self.DB['xps'][who.id] = 0
+        embed = discord.Embed(title = '', description = f'<@{who.id}> 님에게서 {val}xp가 제거되었습니다.')
+        await ctx.channel.send(embed = embed)
 
     @commands.Cog.listener('on_message')
     async def messageXP(self, message):

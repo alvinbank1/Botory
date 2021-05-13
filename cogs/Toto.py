@@ -273,22 +273,26 @@ class Core(DBCog):
 
     @commands.command(name = 'givemoney')
     @commands.has_guild_permissions(administrator = True)
-    async def GiveXP(self, ctx, who, val):
+    async def GiveMoney(self, ctx, who, val):
         await ctx.message.delete()
         if ctx.guild.id != GlobalDB['StoryGuildID']: return
         who = self.mention2member(who, ctx.guild)
         if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
         self.DB['mns'][who.id] += int(val)
+        embed = discord.Embed(title = '', description = f'<@{who.id}> 님께 도토리 {val}개가 지급되었습니다.')
+        await ctx.channel.send(embed = embed)
 
     @commands.command(name = 'takemoney')
     @commands.has_guild_permissions(administrator = True)
-    async def TakeXP(self, ctx, who, val):
+    async def TakeMoney(self, ctx, who, val):
         await ctx.message.delete()
         if ctx.guild.id != GlobalDB['StoryGuildID']: return
         who = self.mention2member(who, ctx.guild)
         if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
-        self.DB['mns'][who.id] -= int(val)
-        if self.DB['mns'][who.id] < 0: self.DB['mns'][who.id] = 0
+        val = min([self.DB['mns'][who.id], int(val)])
+        self.DB['mns'][who.id] -= val
+        embed = discord.Embed(title = '', description = f'<@{who.id}> 님에게서 도토리 {val}개가 제거되었습니다.')
+        await ctx.channel.send(embed = embed)
 
     @commands.command(name = 'setrichrole')
     @commands.has_guild_permissions(administrator = True)
@@ -371,7 +375,7 @@ class Core(DBCog):
         self.on_raid = False
         desc = ''
         if len(self.raiders) == 0:
-            if prize < 1000: desc = f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
+            if prize < 4000: desc = f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
             else: desc = f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
         else:
             for raider in self.raiders:
