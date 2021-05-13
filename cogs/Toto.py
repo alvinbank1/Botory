@@ -74,6 +74,7 @@ class Core(DBCog):
 
     @TotoGroup.command(name = 'new')
     async def NewToto(self, ctx, title, desc, team0, team1):
+        desc = desc.replace('\\n', '\n')
         self.toto = Toto(title, desc, team0, team1, ctx.guild, self)
         TotoChannel = ctx.guild.get_channel(self.DB['TotoChannel'])
         TotoMessage = await TotoChannel.send('temp')
@@ -81,6 +82,7 @@ class Core(DBCog):
         MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
         await TotoChannel.set_permissions(MemberRole, read_messages = True, send_messages = True)
         self.toto.on_bet = True
+        await ctx.send(f'새로운 토토가 <#{self.DB["TotoChannel"]}>에서 시작되었습니다!')
         self.updateembed.start(TotoMessage)
         def check(message):
             return message.channel == TotoChannel and message.author.guild_permissions.administrator and message.content == 'stopbet'
@@ -89,13 +91,13 @@ class Core(DBCog):
         self.toto.on_bet = False
         self.updateembed.cancel()
         await self.updateembed(TotoMessage)
-        embed = TotoMessage.embeds[0]
-        await ctx.send(f'새로운 토토가 <#{self.DB["TotoChannel"]}>에서 시작되었습니다!')
 
     @commands.Cog.listener('on_message')
     async def getbet(self, message):
         if message.channel.id != self.DB['TotoChannel']: return
-        if not self.toto.on_bet: return
+        try:
+            if not self.toto.on_bet: return
+        except: return
         if message.author.id == self.app.user.id: return
         await message.delete()
         TotoChannel, msg = message.channel, message
@@ -196,9 +198,15 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_ready(self):
+        await self.ClearChannel()
         self.TopRankMsg.start()
         self.AutoRole.start()
         self.FeverRaid.start()
+
+    async def ClearChannel(self):
+        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
+        RankChannel = guild.get_channel(self.DB['BankChannel'])
+        await RankChannel.delete_messages(await RankChannel.history(limit = 100).flatten())
 
     @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
@@ -271,22 +279,26 @@ class Core(DBCog):
 
     @commands.command(name = 'givemoney')
     @commands.has_guild_permissions(administrator = True)
-    async def GiveXP(self, ctx, who, val):
+    async def GiveMoney(self, ctx, who, val):
         await ctx.message.delete()
         if ctx.guild.id != GlobalDB['StoryGuildID']: return
         who = self.mention2member(who, ctx.guild)
         if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
         self.DB['mns'][who.id] += int(val)
+        embed = discord.Embed(title = '', description = f'<@{who.id}> 님께 도토리 {val}개가 지급되었습니다.')
+        await ctx.channel.send(embed = embed)
 
     @commands.command(name = 'takemoney')
     @commands.has_guild_permissions(administrator = True)
-    async def TakeXP(self, ctx, who, val):
+    async def TakeMoney(self, ctx, who, val):
         await ctx.message.delete()
         if ctx.guild.id != GlobalDB['StoryGuildID']: return
         who = self.mention2member(who, ctx.guild)
         if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
-        self.DB['mns'][who.id] -= int(val)
-        if self.DB['mns'][who.id] < 0: self.DB['mns'][who.id] = 0
+        val = min([self.DB['mns'][who.id], int(val)])
+        self.DB['mns'][who.id] -= val
+        embed = discord.Embed(title = '', description = f'<@{who.id}> 님에게서 도토리 {val}개가 제거되었습니다.')
+        await ctx.channel.send(embed = embed)
 
     @commands.command(name = 'setrichrole')
     @commands.has_guild_permissions(administrator = True)
@@ -346,17 +358,18 @@ class Core(DBCog):
 
     @tasks.loop(minutes = 3)
     async def FeverRaid(self):
-        if random.random() >= 1 / 10: return
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
-        if (await self.RaidChannel.fetch_message(self.RaidChannel.last_message_id)).author.bot: return
-        aww = discord.utils.get(guild.emojis, name = 'rage_aww')
         if RaidChannel == None: return
-        prize = 500
+        try:
+            if (await RaidChannel.fetch_message(RaidChannel.last_message_id)).author.bot: return
+        except: pass
+        if random.random() >= 1 / 10: return
+        aww = discord.utils.get(guild.emojis, name = 'rage_aww')
+        prize = 2000
         if self.LastRaid:
             hdelta = (datetime.now() - self.LastRaid).total_seconds() / 3600
-            prize = int(hdelta * 1000)
-            prize = max([500, prize])
+            prize = max([int(hdelta * 4000), prize])
         self.RaidMessage = await RaidChannel.send(embed = discord.Embed(
             title = '도토리 레이드 도착!',
             description = f'15초 안에 아래 이모지를 눌러서 도토리 {prize}개를 받으세요!'))
@@ -367,13 +380,14 @@ class Core(DBCog):
         self.LastRaid = datetime.now()
         self.on_raid = False
         desc = ''
-        for raider in self.raiders:
-            dispname = self.GetDisplayName(raider)
-            desc += dispname + ', '
-        desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
         if len(self.raiders) == 0:
-            if prize < 1000: f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
-            else: f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
+            if prize < 4000: desc = f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
+            else: desc = f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
+        else:
+            for raider in self.raiders:
+                dispname = self.GetDisplayName(raider)
+                desc += dispname + ', '
+            desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
         await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
         for user in self.raiders:
             if user.id not in self.DB['mns']: self.DB['mns'][user.id] = 0
@@ -381,7 +395,9 @@ class Core(DBCog):
 
     @commands.Cog.listener('on_reaction_add')
     async def onRaidReaction(self, reaction, user):
-        if not self.on_raid: return
+        try:
+            if not self.on_raid: return
+        except: return
         if reaction.message != self.RaidMessage: return
         if user.bot: return
         if reaction.emoji.name != 'rage_aww': return
