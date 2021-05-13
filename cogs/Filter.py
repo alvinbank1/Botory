@@ -32,7 +32,7 @@ class Core(DBCog):
     @SkipCheck
     async def ModShouldBeOnline(self, message):
         if '경찰' in map(lambda x: x.name, message.author.roles) and message.author.status == discord.Status.offline:
-            await message.channel.send(f'<@{message.author.id}> 관리자께서는 되도록이면 오프라인 상태를 해제하여 관리활동 중임을 표시해주세요.')
+            await message.channel.send(f'<@{message.author.id}> 관리자께서는 되도록이면 오프라인 상태를 해제하여 관리활동 중임을 표시해주세요.', delete_after = 10.0)
 
     @commands.Cog.listener('on_message')
     @SkipCheck
@@ -40,13 +40,6 @@ class Core(DBCog):
         if '🖕' in message.content:
             await message.delete()
             await self.MiddleFingerReport(message.author.id, message.channel)
-
-    @commands.Cog.listener('on_message')
-    @SkipCheck
-    async def DontMentionReply(self, message):
-        if message.reference != None:
-            if message.reference.resolved.author in message.mentions:
-                await message.channel.send('답장을 할 때는 되도록이면 오른쪽 `@켜짐`을 눌러 멘션을 꺼주세요!', delete_after = 5.0, reference = message)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
