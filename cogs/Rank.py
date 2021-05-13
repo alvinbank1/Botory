@@ -58,8 +58,15 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_ready(self):
+        await self.ClearChannel()
         self.TopRankMsg.start()
         self.AutoRole.start()
+
+    async def ClearChannel(self):
+        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
+        RankChannel = guild.get_channel(self.DB['TotoChannel'])
+        OldMessages = await channel.history(limit = 100).flatten()
+        RankChannel.delete_messages(*OldMessages)
 
     @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
