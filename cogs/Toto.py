@@ -206,8 +206,7 @@ class Core(DBCog):
     async def ClearChannel(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         RankChannel = guild.get_channel(self.DB['BankChannel'])
-        OldMessages = await RankChannel.history(limit = 100).flatten()
-        RankChannel.delete_messages(*OldMessages)
+        await RankChannel.delete_messages(await RankChannel.history(limit = 100).flatten())
 
     @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
