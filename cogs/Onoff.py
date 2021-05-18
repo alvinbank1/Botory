@@ -15,9 +15,11 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        version = 'DJ'
-        is_test = False
-        if len(sys.argv) > 1 and sys.argv[1] == '-t': is_test = True
+        version = '2.8.0'
+        try: is_test = (sys.argv[1] == '-t')
+        except: is_test = False
+        try: version = sys.argv[2]
+        except: pass
         await self.app.change_presence(activity = discord.Game(f'Botory {version}{" testing" if is_test else ""} by Undec'))
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])
         if self.DB['StopChannel']:
