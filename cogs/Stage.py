@@ -76,12 +76,13 @@ class Core(DBCog):
     @DJGroup.command(name = 'queue')
     @check_dj
     async def queue(self, ctx):
-        if len(self.playlist) == 0:
-            await ctx.send('대기열이 비어있습니다')
-            return
         txt = []
-        for i in range(len(self.playlist)): txt.append(f'{i + 1} - {self.playlist[i][0]["title"]}')
-        await ctx.send('\n'.join(txt))
+        for i in range(len(self.playlist), 0, -1): txt.append(f'{i} - {self.playlist[i - 1][0]["title"]}')
+        try:
+            embed = discord.Embed(title = '현재 재생중', description = f'{self.np["title"]}')
+            embed.set_image(url = self.np['thumbnails'][0]['url'])
+        except: embed = discord.Embed(title = '현재 재생중인 곡이 없습니다')
+        await ctx.send('\n'.join(txt), embed = embed)
 
     @DJGroup.command(name = 'play')
     @check_dj
@@ -95,14 +96,18 @@ class Core(DBCog):
         self.flag = False
         while True:
             await asyncio.sleep(0.1)
-            if not self.flag and not self.vc.is_playing():
-                try: os.remove(song)
-                except: pass
-                if len(self.playlist) == 0: continue
-                info, song = self.playlist[0]
-                self.playlist.pop(0)
-                self.vc.play(discord.FFmpegPCMAudio(source = song))
-            if self.flag and self.vc.is_playing(): self.vc.pause()
+            try:
+                if not self.flag and not self.vc.is_playing():
+                    try: os.remove(song)
+                    except: pass
+                    if len(self.playlist) == 0: continue
+                    self.np, song = self.playlist[0]
+                    self.playlist.pop(0)
+                    self.vc.play(discord.FFmpegPCMAudio(source = song))
+                if self.flag and self.vc.is_playing(): self.vc.pause()
+            except: break
+        os.remove('*.mp3')
+        del(self.np)
         del(self.flag)
 
     @DJGroup.command(name = 'pause')
