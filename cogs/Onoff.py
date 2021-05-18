@@ -15,7 +15,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        version = '2.7.3'
+        version = 'DJ'
         is_test = False
         if len(sys.argv) > 1 and sys.argv[1] == '-t': is_test = True
         await self.app.change_presence(activity = discord.Game(f'Botory {version}{" testing" if is_test else ""} by Undec'))
