@@ -106,7 +106,7 @@ class Core(DBCog):
                     self.vc.play(discord.FFmpegPCMAudio(source = song))
                 if self.flag and self.vc.is_playing(): self.vc.pause()
             except: break
-        os.remove('*.mp3')
+        os.system('rm *.mp3')
         del(self.np)
         del(self.flag)
 
