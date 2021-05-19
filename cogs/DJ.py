@@ -18,7 +18,7 @@ def check_dj(func):
 
 class Core(DBCog):
     def __init__(self, app):
-        self.CogName = 'Stage'
+        self.CogName = 'DJ'
         DBCog.__init__(self, app)
         self.playlist = []
         self.vc = None
@@ -137,10 +137,12 @@ class Core(DBCog):
     @DJGroup.command(name = 'join')
     @check_dj
     async def join(self, ctx):
-        channel = ctx.guild.get_channel(self.DB['channel'])
+        if ctx.author.voice: channel = ctx.author.voice.channel
+        else: channel = ctx.guild.get_channel(self.DB['channel'])
         if channel == None: return
         if self.vc == None: self.vc = await channel.connect()
-        await ctx.guild.get_member(self.app.user.id).edit(suppress = False)
+        try: await ctx.guild.get_member(self.app.user.id).edit(suppress = False)
+        except: pass
 
     @DJGroup.command(name = 'leave')
     @check_dj
