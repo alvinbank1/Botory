@@ -202,7 +202,9 @@ class Core(DBCog):
         dcRole = guild.get_role(self.DB['dcRole'])
         if dcRole == None: return
         lst = []
-        for key in self.DB['xps']: lst.append([self.DB['xps'][key], key])
+        for key in self.DB['xps']:
+            if guild.get_member(key):
+                lst.append([self.DB['xps'][key], key])
         lst.sort(reverse = True)
         if lst: lst[0].append(1)
         for i in range(1, len(lst)):
@@ -210,7 +212,6 @@ class Core(DBCog):
             if lst[i - 1][0] > lst[i][0]: lst[i][2] += 1
         for elem in lst:
             who = guild.get_member(elem[1])
-            if who == None: continue
             is_dc = elem[2] <= self.DB['dcPivot']
             has_dc = dcRole in who.roles
             if is_dc and not has_dc: await who.add_roles(dcRole)

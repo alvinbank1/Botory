@@ -15,7 +15,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        version = '2.8.1'
+        version = '2.8.2'
         try: is_test = (sys.argv[1] == '-t')
         except: is_test = False
         try: version = sys.argv[2]

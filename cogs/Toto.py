@@ -339,10 +339,12 @@ class Core(DBCog):
     @tasks.loop(minutes = 10)
     async def AutoRole(self):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        RichRole = guild.get_role(self.DB['RichRole'])
-        if RichRole == None: return
+        richRole = guild.get_role(self.DB['RichRole'])
+        if richRole == None: return
         lst = []
-        for key in self.DB['mns']: lst.append([self.DB['mns'][key], key])
+        for key in self.DB['mns']:
+            if guild.get_member(key):
+                lst.append([self.DB['mns'][key], key])
         lst.sort(reverse = True)
         if lst: lst[0].append(1)
         for i in range(1, len(lst)):
@@ -350,11 +352,10 @@ class Core(DBCog):
             if lst[i - 1][0] > lst[i][0]: lst[i][2] += 1
         for elem in lst:
             who = guild.get_member(elem[1])
-            if who == None: continue
             is_rich = elem[2] <= self.DB['RichPivot']
-            has_rich = RichRole in who.roles
-            if is_rich and not has_rich: await who.add_roles(RichRole)
-            if not is_rich and has_rich: await who.remove_roles(RichRole)
+            has_rich = richRole in who.roles
+            if is_rich and not has_rich: await who.add_roles(richRole)
+            if not is_rich and has_rich: await who.remove_roles(richRole)
 
     @tasks.loop(minutes = 3)
     async def FeverRaid(self):
