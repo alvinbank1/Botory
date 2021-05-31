@@ -76,8 +76,9 @@ class Core(DBCog):
     @tasks.loop(minutes = 10.0)
     async def BoostStatus(self):
         await self.BoostCountChannel.edit(name = f'{self.guild.premium_subscription_count}부스트⚬{self.guild.premium_tier}레벨⚬{len(self.guild.premium_subscribers)}명')
-        await self.BoostCountChannel.delete_messages(await self.BoostCountChannel.history(limit = 6).flatten())
+        msgs = await self.BoostCountChannel.history(limit = 10).flatten()
         await self.SendBoostMsgs()
+        await self.BoostCountChannel.delete_messages(msgs)
 
     @BoostStatus.before_loop
     async def PreBoostStatus(self):
@@ -85,39 +86,54 @@ class Core(DBCog):
         await self.BoostCountChannel.delete_messages(await self.BoostCountChannel.history(limit = 6).flatten())
 
     async def SendBoostMsgs(self):
-        await self._SendHeader()
+        files = []
+        files.append(await self._image2file(self.DB['images']['header']))
         boosters = self.guild.premium_subscribers
-        if len(boosters) == 0: await self.BoostCountChannel.send('부스터가 없습니다ㅠㅠ')
-        elif len(boosters) < 7: await self._SendOne(boosters)
-        else:
-            pivot = (len(boosters) + 1) // 2
-            await self._SendOne(boosters[:pivot])
-            await self._SendOne(boosters[pivot:])
+        if len(boosters) == 0:
+            await self.BoostCountChannel.send(files = files)
+            await self.BoostCountChannel.send('부스터가 없습니다.')
+            return
+        imgs = await self._GenImages(boosters)
+        for img in imgs: files.append(await self._image2file(img))
+        await self.BoostCountChannel.send(files = files)
 
-    async def _SendHeader(self):
-        await self._SendImage(self.DB['images']['header'], self.BoostCountChannel)
-
-    async def _SendOne(self, boosters):
-        hcnt = int(len(boosters) ** 0.5)
-        lst = [len(boosters) // hcnt] * hcnt
-        for i in range(len(boosters) % hcnt): lst[i] += 1
-        img = self.DB['images']['background'].copy()
-        tplt = self.DB['images']['template'].copy()
-        length = min((img.height // hcnt, img.width // lst[0]))
-        dy = (img.height + length) // (hcnt + 1)
-        y = dy - length
+    async def _GenImages(self, boosters):
+        arng, sz = await self.GetBestArrangement(len(boosters))
+        img = self.DB['images']['background'].resize((3000, len(arng) * sz))
         index = 0
-        for i in range(hcnt):
-            dx = (img.width + length) // (lst[i] + 1)
-            x = dx - length
-            for j in range(lst[i]):
-                img.paste(await self.makeframe(boosters[index], length), (x, y))
+        dy = (img.height + sz) // (len(arng) + 1)
+        y = dy - sz
+        for i in range(len(arng)):
+            dx = (img.width + sz) // (arng[i] + 1)
+            x = dx - sz
+            for j in range(arng[i]):
+                img.paste(await self._GenFrame(boosters[index], sz), (x, y))
                 x += dx
                 index += 1
             y += dy
-        await self._SendImage(img, self.BoostCountChannel)
+        cheight = 2250 // sz * sz
+        cuts = [0]
+        if cheight > 0:
+            for i in range(1, 9):
+                if cheight * i >= img.height: break
+                cuts.append(cheight * i)
+        cuts.append(img.height)
+        imgs = []
+        for i in range(len(cuts) - 1):
+            imgs.append(img.crop((0, cuts[i], 3000, cuts[i + 1])))
+        return imgs
 
-    async def makeframe(self, who, length):
+    async def GetBestArrangement(self, n):
+        if n == 1: return [1], 2250
+        arng, sz = [], 0
+        for h in range(1, n):
+            _arng = [n // h] * h
+            for j in range(n % h): _arng[j] += 1
+            _sz = min([3000 // _arng[0], 5000 // h])
+            if _sz > sz: arng, sz = _arng, _sz
+        return arng, sz
+
+    async def _GenFrame(self, who, length):
         tplt = self.DB['images']['template'].copy()
         ret = Image.new('RGBA', tplt.size, color = (0, 0, 0, 0))
         l, r, t, b = tplt.width + 1, -1, tplt.height + 1, -1
@@ -140,9 +156,9 @@ class Core(DBCog):
         ret.alpha_composite(textimg)
         return ret.resize((length, length))
 
-    async def _SendImage(self, img, channel):
+    async def _image2file(self, img):
         filename = f'{uuid.uuid4().hex}.png'
         img.save(filename)
-        with open(filename, 'rb') as fp:
-            await channel.send(file = discord.File(fp))
+        with open(filename, 'rb') as fp: ret = discord.File(fp)
         os.remove(filename)
+        return ret
