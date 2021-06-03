@@ -1,5 +1,4 @@
-*.tgz
-log.log
+*.log
 *.db
 # Created by https://www.toptal.com/developers/gitignore/api/vim,python,venv,images
 # Edit at https://www.toptal.com/developers/gitignore?templates=vim,python,venv,images
