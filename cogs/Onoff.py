@@ -15,16 +15,12 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        version = '2.8.3'
-        try: is_test = (sys.argv[1] == '-t')
-        except: is_test = False
-        try: version = sys.argv[2]
-        except: pass
-        await self.app.change_presence(activity = discord.Game(f'Botory {version}{" testing" if is_test else ""} by Undec'))
+        version = '2.8.4'
+        await self.app.change_presence(activity = discord.Game(f'Botory {version} by Undec'))
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])
         if self.DB['StopChannel']:
             StopChannel = guild.get_channel(self.DB['StopChannel'])
-            await StopChannel.send(f'보토리 {version}{"(testing)" if is_test else ""} is back.')
+            await StopChannel.send(f'보토리 {version} is back.')
         self.MemberRole = discord.utils.get(guild.roles, name = '멤버')
         perms = self.MemberRole.permissions
         perms.update(add_reactions = True, attach_files = True)
