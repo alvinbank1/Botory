@@ -1,0 +1,10 @@
+[Unit]
+Description=Botory, a discord bot
+
+[Service]
+Type=simple
+WorkingDirectory=/home/undec/Documents/Botory
+ExecStart=go.sh > log.log 2> elog.log &
+
+[Install]
+WantedBy=multi-user.target
