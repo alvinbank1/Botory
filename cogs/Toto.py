@@ -374,9 +374,9 @@ class Core(DBCog):
         self.RaidMessage = await RaidChannel.send(embed = discord.Embed(
             title = '도토리 레이드 도착!',
             description = f'15초 안에 아래 이모지를 눌러서 도토리 {prize}개를 받으세요!'))
-        await self.RaidMessage.add_reaction(aww)
         self.raiders = set()
         self.on_raid = True
+        await self.RaidMessage.add_reaction(aww)
         await asyncio.sleep(15)
         self.LastRaid = datetime.now()
         self.on_raid = False

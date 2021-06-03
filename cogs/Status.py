@@ -4,6 +4,9 @@ from pkgs.GlobalDB import GlobalDB
 from pkgs.DBCog import DBCog
 from PIL import Image, ImageDraw, ImageFont
 import uuid, os, requests
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+from io import BytesIO
 
 class Core(DBCog):
     def __init__(self, app):
@@ -86,20 +89,68 @@ class Core(DBCog):
         await self.BoostCountChannel.delete_messages(await self.BoostCountChannel.history(limit = 6).flatten())
 
     async def SendBoostMsgs(self):
-        files = []
-        files.append(await self._image2file(self.DB['images']['header']))
         boosters = self.guild.premium_subscribers
-        if len(boosters) == 0:
-            await self.BoostCountChannel.send(files = files)
-            await self.BoostCountChannel.send('부스터가 없습니다.')
-            return
-        imgs = await self._GenImages(boosters)
-        for img in imgs: files.append(await self._image2file(img))
+        with ProcessPoolExecutor() as pool:
+            db = []
+            for key in self.DB['images']:
+                img = BytesIO()
+                self.DB['images'][key].save(img, 'png')
+                db.append((key, img))
+            db = tuple(db)
+            _bs = []
+            for who in boosters:
+                _bs.append((str(who.avatar_url), self.GetDisplayName(who)))
+            _bs = tuple(_bs)
+            func = partial(self.GenImages, db, _bs)
+            imagepaths = await self.app.loop.run_in_executor(pool, func)
+        files = []
+        for path in imagepaths:
+            with open(path, 'rb') as fp: files.append(discord.File(fp))
+            os.remove(path)
         await self.BoostCountChannel.send(files = files)
+        if len(boosters) == 0: await self.BoostCountChannel.send('부스터가 없습니다.')
 
-    async def _GenImages(self, boosters):
-        arng, sz = await self.GetBestArrangement(len(boosters))
-        img = self.DB['images']['background'].resize((3000, len(arng) * sz))
+    @staticmethod
+    def GenImages(_db, boosters):
+        DB = dict()
+        for item in _db:
+            key = item[0]
+            img = Image.open(item[1])
+            DB[key] = img
+        def GetBestArrangement(n):
+            if n == 1: return [1], 2250
+            arng, sz = [], 0
+            for h in range(1, n):
+                _arng = [n // h] * h
+                for j in range(n % h): _arng[j] += 1
+                _sz = min([3000 // _arng[0], 5000 // h])
+                if _sz > sz: arng, sz = _arng, _sz
+            return arng, sz
+
+        def GenFrame(avatar_url, nick, length):
+            tplt = DB['template'].copy()
+            ret = Image.new('RGBA', tplt.size, color = (0, 0, 0, 0))
+            l, r, t, b = tplt.width + 1, -1, tplt.height + 1, -1
+            for x in range(tplt.width):
+                for y in range(tplt.height):
+                    if tplt.load()[x, y][3] == 0:
+                        l = min([x, l])
+                        r = max([x, r])
+                        t = min([y, t])
+                        b = max([y, b])
+            assert r >= 0
+            pf = Image.open(requests.get(avatar_url, stream = True).raw).convert('RGBA').resize((r - l + 1, b - t + 1))
+            ret.paste(pf, (l, t))
+            ret.alpha_composite(tplt)
+            textimg = Image.new('RGBA', tplt.size, color = (0, 0, 0, 0))
+            canvas = ImageDraw.Draw(textimg)
+            if len(nick) > 9: nick = nick[:8] + '...'
+            canvas.text((textimg.width // 2, int(textimg.height * 0.8)), nick, font = ImageFont.truetype('NanumGothic.ttf', 65), fill = (255, 0, 255, 255), align = 'center', anchor = 'mm', stroke_width = 2)
+            ret.alpha_composite(textimg)
+            return ret.resize((length, length))
+
+        arng, sz = GetBestArrangement(len(boosters))
+        img = DB['background'].resize((3000, len(arng) * sz))
         index = 0
         dy = (img.height + sz) // (len(arng) + 1)
         y = dy - sz
@@ -107,7 +158,7 @@ class Core(DBCog):
             dx = (img.width + sz) // (arng[i] + 1)
             x = dx - sz
             for j in range(arng[i]):
-                img.paste(await self._GenFrame(boosters[index], sz), (x, y))
+                img.paste(GenFrame(*boosters[index], sz), (x, y))
                 x += dx
                 index += 1
             y += dy
@@ -118,47 +169,12 @@ class Core(DBCog):
                 if cheight * i >= img.height: break
                 cuts.append(cheight * i)
         cuts.append(img.height)
-        imgs = []
+        imgs = [DB['header']]
         for i in range(len(cuts) - 1):
             imgs.append(img.crop((0, cuts[i], 3000, cuts[i + 1])))
-        return imgs
-
-    async def GetBestArrangement(self, n):
-        if n == 1: return [1], 2250
-        arng, sz = [], 0
-        for h in range(1, n):
-            _arng = [n // h] * h
-            for j in range(n % h): _arng[j] += 1
-            _sz = min([3000 // _arng[0], 5000 // h])
-            if _sz > sz: arng, sz = _arng, _sz
-        return arng, sz
-
-    async def _GenFrame(self, who, length):
-        tplt = self.DB['images']['template'].copy()
-        ret = Image.new('RGBA', tplt.size, color = (0, 0, 0, 0))
-        l, r, t, b = tplt.width + 1, -1, tplt.height + 1, -1
-        for x in range(tplt.width):
-            for y in range(tplt.height):
-                if tplt.load()[x, y][3] == 0:
-                    l = min([x, l])
-                    r = max([x, r])
-                    t = min([y, t])
-                    b = max([y, b])
-        assert r >= 0
-        pf = Image.open(requests.get(who.avatar_url, stream = True).raw).convert('RGBA').resize((r - l + 1, b - t + 1))
-        ret.paste(pf, (l, t))
-        ret.alpha_composite(tplt)
-        textimg = Image.new('RGBA', tplt.size, color = (0, 0, 0, 0))
-        canvas = ImageDraw.Draw(textimg)
-        nick = self.GetDisplayName(who)
-        if len(nick) > 9: nick = nick[:8] + '...'
-        canvas.text((textimg.width // 2, int(textimg.height * 0.8)), nick, font = ImageFont.truetype('NanumGothic.ttf', 65), fill = (255, 0, 255, 255), align = 'center', anchor = 'mm', stroke_width = 2)
-        ret.alpha_composite(textimg)
-        return ret.resize((length, length))
-
-    async def _image2file(self, img):
-        filename = f'{uuid.uuid4().hex}.png'
-        img.save(filename)
-        with open(filename, 'rb') as fp: ret = discord.File(fp)
-        os.remove(filename)
-        return ret
+        res = []
+        for img in imgs:
+            filename = f'{uuid.uuid4().hex}.png'
+            res.append(filename)
+            img.save(filename)
+        return res
