@@ -1,7 +1,6 @@
 import discord, uuid
 from discord.ext import commands
-from pkgs.GlobalDB import GlobalDB
-from pkgs.DBCog import DBCog
+from StudioBot.pkgs.DBCog import DBCog
 from functools import wraps
 
 def SkipCheck(func):
@@ -18,13 +17,12 @@ class Core(DBCog):
         DBCog.__init__(self, app)
 
     def initDB(self):
-        self.DB = dict()
         self.DB['ReportChannel'] = None
 
     @commands.command(name = 'reporthere')
     @commands.has_guild_permissions(administrator = True)
     async def SetChannels(self, ctx):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         await ctx.message.delete()
         self.DB['ReportChannel'] = ctx.channel.id
 
@@ -54,16 +52,3 @@ class Core(DBCog):
         await channel.send(f'<@{UserID}> 중지 절단 완료.')
         if ReportChannel:
             await ReportChannel.send(f'<@{UserID}> 이 사용자 중지 이모지 사용으로 경고바랍니다.', allowed_mentions = discord.AllowedMentions.none())
-
-    @commands.command(name = 'ignorehere')
-    @commands.has_guild_permissions(administrator = True)
-    async def SetIgnore(self, ctx):
-        await ctx.message.delete()
-        GlobalDB['IgnoreChannels'].add(ctx.channel.id)
-
-    @commands.command(name = 'watchhere')
-    @commands.has_guild_permissions(administrator = True)
-    async def DelIgnore(self, ctx):
-        await ctx.message.delete()
-        GlobalDB['IgnoreChannels'].remove(ctx.channel.id)
-

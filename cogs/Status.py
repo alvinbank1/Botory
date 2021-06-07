@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 from pkgs.GlobalDB import GlobalDB
 from pkgs.DBCog import DBCog
 from PIL import Image, ImageDraw, ImageFont
-import uuid, os, requests
+import uuid, os
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from io import BytesIO
@@ -127,7 +127,7 @@ class Core(DBCog):
                 if _sz > sz: arng, sz = _arng, _sz
             return arng, sz
 
-        def GenFrame(avatar_url, nick, length):
+        def GenFrame(avatar, nick, length):
             tplt = DB['template'].copy()
             ret = Image.new('RGBA', tplt.size, color = (0, 0, 0, 0))
             l, r, t, b = tplt.width + 1, -1, tplt.height + 1, -1
@@ -139,7 +139,7 @@ class Core(DBCog):
                         t = min([y, t])
                         b = max([y, b])
             assert r >= 0
-            pf = Image.open(requests.get(avatar_url, stream = True).raw).convert('RGBA').resize((r - l + 1, b - t + 1))
+            pf = Image.open(avatar).convert('RGBA').resize((r - l + 1, b - t + 1))
             ret.paste(pf, (l, t))
             ret.alpha_composite(tplt)
             textimg = Image.new('RGBA', tplt.size, color = (0, 0, 0, 0))

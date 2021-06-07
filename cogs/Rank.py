@@ -1,87 +1,107 @@
 import discord
 from discord.ext import commands, tasks
-from pkgs.DBCog import DBCog
-from pkgs.GlobalDB import GlobalDB
-from pkgs.Scheduler import Schedule
+from StudioBot.pkgs.DBCog import DBCog
 from PIL import Image, ImageDraw, ImageFont
-import requests, os, uuid
+import os, uuid, pickle
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+from io import BytesIO
 
 class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'Rank'
         DBCog.__init__(self, app)
-        self.TopRankMessage = None
 
     def initDB(self):
-        self.DB = dict()
         self.DB['channel'] = None
-        self.DB['xps'] = dict()
-        self.DB['flag'] = dict()
         self.DB['dcRole'] = None
         self.DB['dcPivot'] = None
+        self.DB['xps'] = dict()
+        self.DB['flag'] = dict()
 
-    def level2xp(self, rank):
-        return (10 * rank ** 3 + 135 * rank ** 2 + 455 * rank) // 6
+    @staticmethod
+    def level2xp(level):
+        return (10 * level ** 3 + 135 * level ** 2 + 455 * level) // 6
 
-    def xp2level(self, xp):
+    @staticmethod
+    def xp2level(xp):
         l, r = 0, 1001
         while r - l > 1:
             mid = (l + r) // 2
-            if xp < self.level2xp(mid): r = mid
+            if xp < Core.level2xp(mid): r = mid
             else: l = mid
         return l
 
     @commands.command(name = 'ranksetup')
     @commands.has_guild_permissions(administrator = True)
-    async def Setup(self, ctx, CategoryID):
+    async def Setup(self, ctx, category: discord.CategoryChannel):
+        if ctx.guild.id != self.StoryGuild.id: return
         await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        Category = ctx.guild.get_channel(int(CategoryID))
-        RankChannel = await Category.create_text_channel('랭크확인')
+        RankChannel = await category.create_text_channel('랭크확인')
         self.DB['channel'] = RankChannel.id
-        MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
         await RankChannel.edit(sync_permissions = True)
 
     @commands.command(name = 'rank')
-    async def GetRank(self, ctx, arg = None):
+    async def GetRank(self, ctx, arg: discord.Member = None):
+        if ctx.guild.id != self.StoryGuild.id: return
         await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
         if ctx.channel.id != self.DB['channel']: return
         who = ctx.author
-        if arg and ctx.author.guild_permissions.administrator: who = self.mention2member(arg, ctx.guild)
-        img = self._makerankone(who)
-        imgname = uuid.uuid4().hex + '.png'
-        img.save(imgname)
-        with open(imgname, 'rb') as fp:
+        if arg and ctx.author.guild_permissions.administrator: who = arg
+        imgpath = await self.GenRankFrame(who)
+        with open(imgpath, 'rb') as fp:
             await ctx.send(file = discord.File(fp), delete_after = 10.0)
-        os.remove(imgname)
+        os.remove(imgpath)
 
     @commands.Cog.listener()
     async def on_ready(self):
-        await self.ClearChannel()
+        self.StoryGuild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])
         self.TopRankMsg.start()
         self.AutoRole.start()
 
-    async def ClearChannel(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        RankChannel = guild.get_channel(self.DB['channel'])
-        await RankChannel.delete_messages(await RankChannel.history(limit = 100).flatten())
-
     @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        RankChannel = guild.get_channel(self.DB['channel'])
-        if RankChannel == None: return
-        img = self.makerankimg()
-        imgname = uuid.uuid4().hex + '.png'
-        img.save(imgname)
-        with open(imgname, 'rb') as fp:
-            try: await self.TopRankMessage.delete()
-            except: pass
+        msgs = await RankChannel.history(limit = 20).flatten()
+        RankChannel = self.StoryGuild.get_channel(self.DB['channel'])
+        assert RankChannel
+        imgpath = await self.GenRankTable()
+        with open(imgpath, 'rb') as fp:
             self.TopRankMessage = await RankChannel.send(file = discord.File(fp))
-        os.remove(imgname)
+        os.remove(imgpath)
+        await RankChannel.delete_messages(msgs)
 
-    def makerankimg(self):
+    @TopRankMsg.before_loop
+    async def ClearChannel(self):
+        RankChannel = self.StoryGuild.get_channel(self.DB['channel'])
+        await RankChannel.delete_messages(await RankChannel.history(limit = 20).flatten())
+
+    async def GenRankTable(self):
+        lst = []
+        for whoid in self.DB['xps']:
+            if self.StoryGuild.get_member(whoid):
+                lst.append((self.DB['xps'][whoid], whoid))
+        lst.sort(reverse = True)
+        lst = lst[:20]
+        for i in range(len(lst)): lst[i] = await self.GetInfo(lst[i][1])
+        data = BytesIO()
+        pickle.dump(lst, data)
+        func = partial(self.GenImages, data)
+        with ProcessPoolExecutor() as pool:
+            res = await self.app.loop.run_in_executor(pool, func)
+        return res
+
+    async def GenRankFrame(self, who):
+        data = BytesIO()
+        pickle.dump(await self.GetInfo(who), data)
+        func = partial(self.GenFrame, data)
+        with ProcessPoolExecutor() as pool:
+            res = await self.app.loop.run_in_executor(pool, func)
+        return res
+
+    async def GetInfo(self, who: discord.Member):
+
+    @staticmethod
+    def GenImages(data):
         guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
         lst = []
         for key in self.DB['xps']: lst.append([self.DB['xps'][key], key])
@@ -97,7 +117,8 @@ class Core(DBCog):
             i += 1
         return res
 
-    def _makerankone(self, who, rank = None):
+    @staticmethod
+    def GenFrame(data):
         xp = 0
         if who.id in self.DB['xps']: xp = self.DB['xps'][who.id]
         if rank == None: 
