@@ -13,7 +13,10 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
-        channel = await member.create_dm()
+        try: channel = await asyncio.wait_for(member.create_dm(), timeout = 60.0)
+        except:
+            await member.kick(reason = 'CAPTCHA timeout')
+            return
         filename = f'{uuid.uuid4().hex}.png'
         img = ImageCaptcha(fonts = ['NanumGothic.ttf'])
         txt = ''
