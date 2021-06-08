@@ -1,1 +1,1 @@
-__all__ = ['Reactor', 'Banisher', 'Logger', 'Filter', 'Status', 'Onoff', 'StudioLink', 'Moderator', 'Rank', 'Toto', 'DJ', 'Money']
+__all__ = ['Reactor', 'Banisher', 'Logger', 'Filter', 'Status', 'Onoff', 'StudioLink', 'Moderator', 'Rank', 'DJ', 'Money', 'Toto']

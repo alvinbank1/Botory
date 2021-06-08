@@ -17,7 +17,7 @@ class Core(DBCog):
 
     @commands.command(name = 'countban')
     @commands.has_guild_permissions(administrator = True)
-    async def ModBan(self, ctx, count: int):
+    async def CountBan(self, ctx, count: int):
         await ctx.message.delete()
         msgs = await ctx.channel.history(limit = count).flatten()
         for msg in msgs:

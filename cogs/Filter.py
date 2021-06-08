@@ -6,7 +6,7 @@ from functools import wraps
 def SkipCheck(func):
     @wraps(func)
     async def wrapper(self, message):
-        if message.guild.id != GlobalDB['StoryGuildID']: return
+        if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.author.bot or message.author.guild_permissions.administrator: return
         return await func(self, message)
     return wrapper
@@ -29,7 +29,8 @@ class Core(DBCog):
     @commands.Cog.listener('on_message')
     @SkipCheck
     async def ModShouldBeOnline(self, message):
-        if message.author.permissions_in(message.channel).manage_messages and not message.author.administrator:
+        if message.author.status != discord.Status.offline: return
+        if message.author.permissions_in(message.channel).manage_messages and not message.author.guild_permissions.administrator:
             await message.channel.send(f'<@{message.author.id}> 관리자께서는 되도록이면 오프라인 상태를 해제하여 관리활동 중임을 표시해주세요.', delete_after = 10.0)
 
     @commands.Cog.listener('on_message')
@@ -41,7 +42,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
-        if reaction.message.guild.id != GlobalDB['StoryGuildID']: return
+        if reaction.message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if user.bot or user.guild_permissions.administrator: return
         if '🖕' in str(reaction.emoji):
             await reaction.clear()

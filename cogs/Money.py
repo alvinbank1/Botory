@@ -49,46 +49,45 @@ class Core(DBCog):
 
     @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
-        msgs = await RankChannel.history(limit = 20).flatten()
-        RankChannel = self.StoryGuild.get_channel(self.DB['channel'])
-        assert RankChannel
+        msgs = await self.RankChannel.history(limit = 20).flatten()
+        self.RankChannel = self.StoryGuild.get_channel(self.DB['channel'])
+        assert self.RankChannel
         imgpath = await self.GenRankTable()
         with open(imgpath, 'rb') as fp:
-            self.TopRankMessage = await RankChannel.send(file = discord.File(fp))
+            self.TopRankMessage = await self.RankChannel.send(file = discord.File(fp))
         os.remove(imgpath)
-        await RankChannel.delete_messages(msgs)
+        await self.RankChannel.delete_messages(msgs)
 
     @TopRankMsg.before_loop
     async def ClearChannel(self):
-        RankChannel = self.StoryGuild.get_channel(self.DB['channel'])
-        await RankChannel.delete_messages(await RankChannel.history(limit = 20).flatten())
+        self.RankChannel = self.StoryGuild.get_channel(self.DB['channel'])
+        await self.RankChannel.delete_messages(await self.RankChannel.history(limit = 20).flatten())
 
     async def GenRankTable(self):
         lst = []
-        for whoid in self.DB['xps']:
+        for whoid in self.DB['mns']:
             if self.StoryGuild.get_member(whoid):
-                lst.append((self.DB['xps'][whoid], whoid))
+                lst.append((self.DB['mns'][whoid], whoid))
         lst.sort(reverse = True)
-        lst = lst[:20]
-        for i in range(len(lst)): lst[i] = await self.GetInfo(lst[i][1], lst)
-        data = BytesIO()
-        pickle.dump(lst, data)
-        func = partial(self.GenImages, data)
+        _lst = lst[:20]
+        lst = [0] * len(_lst)
+        for i in range(len(lst)): lst[i] = await self.GetInfo(_lst[i][1], _lst)
+        func = partial(self.GenImages, lst)
         with ProcessPoolExecutor() as pool:
             res = await self.app.loop.run_in_executor(pool, func)
         return res
 
     async def GenRankFrame(self, who):
-        data = BytesIO()
-        pickle.dump(await self.GetInfo(who), data)
+        data = await self.GetInfo(who)
         func = partial(self.GenFrame, data)
         with ProcessPoolExecutor() as pool:
             res = await self.app.loop.run_in_executor(pool, func)
         return res
 
-    async def GetInfo(self, who: discord.Member, lst = None):
+    async def GetInfo(self, whoid, lst = None):
         res = dict()
         res['money'] = 0
+        who = self.StoryGuild.get_member(whoid)
         if who.id in self.DB['mns']: res['money'] = self.DB['mns'][who.id]
         if lst == None:
             lst = []
@@ -97,17 +96,16 @@ class Core(DBCog):
                     lst.append((self.DB['mns'][whoid], whoid))
         res['rank'] = 1
         for e in lst:
-            if e[0] < res['money']: res['rank'] += 1
+            if e[0] > res['money']: res['rank'] += 1
         res['name'] = self.GetDisplayName(who)
+        res['avatar'] = await who.avatar_url.read()
         return res
 
     @staticmethod
-    def GenImages(data):
-        lst = pickle.load(data)
+    def GenImages(lst):
         res = Image.new("RGB", (1480 * 2 + 20, 280 * 10 + 20), (50, 50, 50))
         for i in range(len(lst)):
-            data = BytesIO()
-            pickle.dump(lst[i], data)
+            data = lst[i]
             filename = Core.GenFrame(data)
             img = Image.open(filename)
             os.remove(filename)
@@ -118,8 +116,7 @@ class Core(DBCog):
 
     @staticmethod
     def GenFrame(data):
-        data = pickle.load(data)
-        xp = data['money']
+        money = data['money']
         rank = data['rank']
         name = data['name']
         if len(name) > 10: name = name[:9] + '...'
@@ -143,7 +140,7 @@ class Core(DBCog):
         canvas.text((1150, 165), moneystr, font = ImageFont.truetype('NanumGothic.ttf', 48), fill = (255, 255, 255), anchor = 'mm')
 
         res.convert('RGBA')
-        profile = Image.open(requests.get(who.avatar_url, stream = True).raw)
+        profile = Image.open(BytesIO(data['avatar']))
         profile = profile.resize((120, 120))
         mask = Image.new('L', (120, 120), 0)
         mcanvas = ImageDraw.Draw(mask)
@@ -157,7 +154,7 @@ class Core(DBCog):
     @commands.command(name = 'givemoney')
     @commands.has_guild_permissions(administrator = True)
     async def GiveMoney(self, ctx, who: discord.Member, val: int):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         await ctx.message.delete()
         if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
         self.DB['mns'][who.id] += val
@@ -167,7 +164,7 @@ class Core(DBCog):
     @commands.command(name = 'takemoney')
     @commands.has_guild_permissions(administrator = True)
     async def TakeMoney(self, ctx, who: discord.Member, val: int):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         await ctx.message.delete()
         if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
         self.DB['mns'][who.id] -= val
@@ -177,9 +174,9 @@ class Core(DBCog):
 
     @commands.Cog.listener('on_message')
     async def messageXP(self, message):
-        if message.guild.id != GlobalDB['StoryGuildID']: return
+        if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.author.bot: return
-        if message.channel.id in (self.DB['channel'], self.GetGlobalDB('Toto')['channel']): return
+        if message.channel.id == self.DB['channel']: return
         whoid = message.author.id
         if whoid not in self.DB['flag']: self.DB['flag'][whoid] = datetime.now()
         if self.DB['flag'][whoid] <= datetime.now():
@@ -189,7 +186,7 @@ class Core(DBCog):
 
     @commands.Cog.listener('on_message')
     async def nomsginrank(self, message):
-        if message.guild.id != GlobalDB['StoryGuildID']: return
+        if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.channel.id != self.DB['channel']: return
         if message.author.id == self.app.user.id: return
         ctx = await self.app.get_context(message)
@@ -198,14 +195,14 @@ class Core(DBCog):
     @commands.command(name = 'setrichrole')
     @commands.has_guild_permissions(administrator = True)
     async def SetRole(self, ctx, role: discord.Role, val):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         await ctx.message.delete()
         self.DB['RichRole'] = role.id
         self.DB['RichPivot'] = int(val)
 
     @tasks.loop(minutes = 10)
     async def AutoRole(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
+        guild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])        
         RichRole = guild.get_role(self.DB['RichRole'])
         if RichRole == None: return
         lst = []

@@ -20,6 +20,7 @@ class Core(DBCog):
     async def AutoForgiver(self):
         whoid_list = []
         for whoid in self.DB:
+            if whoid == 'ModRoles': continue
             if self.DB[whoid]['expire']: whoid_list.append(whoid)
         whoid_list.sort(key = lambda whoid: self.DB[whoid]['expire'])
         for whoid in whoid_list:
