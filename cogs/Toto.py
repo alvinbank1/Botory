@@ -99,14 +99,18 @@ class Core(DBCog):
         if message.author.id == self.app.user.id: return
         await message.delete()
         TotoChannel, msg = message.channel, message
+        balance = self.GetGlobalDB('Money')['mns'].get(msg.author.id, 0)
         try: val = int(msg.content)
-        except: return
+        except:
+            sgn = 1 if val[0] == '+' else -1
+            if val[1:] == 'all': val = sgn * balance
+            elif val[1:] == '0.5': val = sgn * (balance // 2)
         if val == 0:
             for i in range(2):
                 if msg.author.id in self.toto.bet[i]: del(self.toto.bet[i][msg.author.id])
             await TotoChannel.send(f'<@{msg.author.id}>님 베팅 취소되었습니다.', delete_after = 3.0)
             return
-        if msg.author.id not in self.GetGlobalDB('Money')['mns'] or abs(val) > self.GetGlobalDB('Money')['mns'][msg.author.id]:
+        if abs(val) > balance:
             await TotoChannel.send(f'<@{msg.author.id}>님 도토리가 부족하여 베팅 취소되었습니다.', delete_after = 3.0)
             return
         val, index = abs(val), int(val < 0)
@@ -132,10 +136,12 @@ class Core(DBCog):
                 },
                 {
                     'name' : '베팅 방법',
-                    'value' : '+숫자 혹은 -숫자 치시면 됩니다. 가장 마지막으로 베팅한 것만 적용되며 0을 입력하면 베팅이 취소됩니다.\n' +
+                    'value' : '+숫자 혹은 -숫자 혹은 특수코드 치시면 됩니다. 가장 마지막으로 베팅한 것만 적용되며 0을 입력하면 베팅이 취소됩니다.\n' +
                         '예시)\n' +
                         '`+1000` -> :regional_indicator_a:에 1000개 베팅\n' + 
                         '`-2000` -> :regional_indicator_b:에 2000개 베팅\n' + 
+                        '`-all` -> :regional_indicator_b:에 올인\n' + 
+                        '`+0.5` -> :regional_indicator_a:에 재산의 절반 베팅\n' + 
                         '`0` -> 베팅취소'
                 },
                 {
@@ -210,15 +216,40 @@ class Core(DBCog):
         if len(self.raiders) == 0:
             if prize < 4000: desc = f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
             else: desc = f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
-        else:
-            for raider in self.raiders:
+            await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
+            return
+        self.raiders = list(self.raiders)
+        random.shuffle(self.raiders)
+        bonus = self.raiders[0]
+        boosts, normals = [], []
+        rewards = dict()
+        for raider in self.raiders[1:]:
+            if raider.premium_since: boosts.append(raider)
+            else: normals.append(raider)
+        embed = discord.Embed(title = '도토리 레이드 마감~~!', description = '')
+        if len(normals) > 0:
+            desc = ''
+            for raider in normals:
+                rewards[raider.id] = prize
                 dispname = self.GetDisplayName(raider)
                 desc += dispname + ', '
-            desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
-        await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
-        for user in self.raiders:
-            if user.id not in self.GetGlobalDB('Money')['mns']: self.GetGlobalDB('Money')['mns'][user.id] = 0
-            self.GetGlobalDB('Money')['mns'][user.id] += prize
+            embed.add_field(name = f'{prize}개 획득 성공!', value = desc[:-2], inline = False)
+        if len(boosts) > 0:
+            desc = ''
+            for raider in boosts:
+                rewards[raider.id] = 2 * prize
+                dispname = self.GetDisplayName(raider)
+                desc += dispname + ', '
+            embed.add_field(name = f'부스터 2배 혜택으로 {2 * prize}개 획득 성공!', value = desc[:-2], inline = False)
+        if bonus.premium_since:
+            rewards[raider.id] = 4 * prize
+            embed.add_field(name = f'부스터 2배 혜택과 레이드 2배 당첨까지! {4 * prize}개 획득 성공!', value = self.GetDisplayName(bonus), inline = False)
+        else:
+            rewards[raider.id] = 2 * prize
+            embed.add_field(name = f'레이드 2배 당첨으로 {2 * prize}개 획득 성공!', value = self.GetDisplayName(bonus), inline = False)
+        await self.RaidMessage.edit(embed = embed)
+        for userid in rewards:
+            self.GetGlobalDB('Money')['mns'][userid] = self.GetGlobalDB('Money')['mns'].get(userid, 0) + rewards[userid]
 
     @commands.Cog.listener('on_reaction_add')
     async def onRaidReaction(self, reaction, user):

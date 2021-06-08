@@ -53,3 +53,24 @@ class Core(DBCog):
         await channel.send(f'<@{user.id}> 중지 절단 완료.')
         if ReportChannel:
             await ReportChannel.send(f'<@{user.id}> 이 사용자 중지 이모지 사용으로 경고바랍니다.', allowed_mentions = discord.AllowedMentions.none())
+
+    @commands.command(name = 'report', aliases = ['신고'])
+    async def SetChannels(self, ctx, *args):
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
+        await ctx.message.delete()
+        if ctx.message.reference == None: return
+        reason = ctx.message.content[len(f'{ctx.prefix}{ctx.invoked_with}'):].strip()
+        ReportChannel = ctx.guild.get_channel(self.DB['ReportChannel'])
+        ReferenceMessage = await self.MessageFromLink(ctx.message.reference.jump_url)
+        async for msg in ReportChannel.history(limit = 10):
+            if msg.embeds[0].fields[4].value == str(ReferenceMessage.id):
+                await ctx.send('이미 신고된 메세지입니다', delete_after = 5.0)
+                return
+        embed = discord.Embed(title = '신고', description = '')
+        embed.add_field(name = '신고자', value = f'<@{ctx.author.id}>', inline = False)
+        embed.add_field(name = '신고대상자', value = f'<@{ReferenceMessage.author.id}>', inline = False)
+        embed.add_field(name = '신고대상 메세지 채널', value = f'<#{ReferenceMessage.channel.id}>', inline = False)
+        embed.add_field(name = '신고대상 메세지 링크', value = f'[이동하기]({ReferenceMessage.jump_url})', inline = False)
+        embed.add_field(name = '신고대상 메세지 id', value = f'{ReferenceMessage.id}', inline = False)
+        if len(reason) > 0: embed.add_field(name = '신고사유', value = f'{reason}', inline = False)
+        await ReportChannel.send(embed = embed)

@@ -71,7 +71,7 @@ class Core(DBCog):
         lst.sort(reverse = True)
         _lst = lst[:20]
         lst = [0] * len(_lst)
-        for i in range(len(lst)): lst[i] = await self.GetInfo(_lst[i][1], _lst)
+        for i in range(len(_lst)): lst[i] = await self.GetInfo(_lst[i][1], _lst)
         func = partial(self.GenImages, lst)
         with ProcessPoolExecutor() as pool:
             res = await self.app.loop.run_in_executor(pool, func)
@@ -86,9 +86,8 @@ class Core(DBCog):
 
     async def GetInfo(self, whoid, lst = None):
         res = dict()
-        res['money'] = 0
+        res['money'] = self.DB['mns'].get(whoid, 0)
         who = self.StoryGuild.get_member(whoid)
-        if who.id in self.DB['mns']: res['money'] = self.DB['mns'][who.id]
         if lst == None:
             lst = []
             for whoid in self.DB['mns']:

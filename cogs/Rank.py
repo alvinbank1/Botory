@@ -84,7 +84,7 @@ class Core(DBCog):
         lst.sort(reverse = True)
         _lst = lst[:20]
         lst = [0] * len(_lst)
-        for i in range(len(lst)): lst[i] = await self.GetInfo(_lst[i][1], _lst)
+        for i in range(len(_lst)): lst[i] = await self.GetInfo(_lst[i][1], _lst)
         func = partial(self.GenImages, lst)
         with ProcessPoolExecutor() as pool:
             res = await self.app.loop.run_in_executor(pool, func)
