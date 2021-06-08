@@ -1,5 +1,5 @@
 import discord, asyncio
-from discord.ext import commands
+from discord.ext import commands, tasks
 from StudioBot.pkgs.DBCog import DBCog
 from datetime import datetime
 
@@ -7,9 +7,9 @@ class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'Banisher'
         DBCog.__init__(self, app)
-        self.ModRoleNames = ['경찰', '검찰', '의원']
 
-    def initDB(self): return
+    def initDB(self):
+        self.DB['ModRoles'] = []
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -37,8 +37,7 @@ class Core(DBCog):
         if ctx.guild.id != self.StoryGuild.id: return
         await ctx.message.delete()
         if await self._banish(ctx, who):
-            embed = discord.Embed(title = '', description = f'<@{who.id}> 님을 유배했습니다.')
-            await ctx.channel.send(embed = embed)
+            await ctx.channel.send(embed = discord.Embed(title = '', description = f'<@{who.id}> 님을 유배했습니다.'))
         self.AutoForgiver.restart()
 
     @commands.command(name = 'tempbanish')
@@ -49,8 +48,8 @@ class Core(DBCog):
         if await self._banish(ctx, who):
             seconds = self.ParseDuration(duration)
             self.DB[who.id]['expire'] = datetime.now() + timedelta(seconds = seconds)
-            embed = discord.Embed(title = '', description = f'<@{who.id}> 님을 {self.Duration2text(timedelta(seconds = seconds))}동안 유배했습니다.')
-            await ctx.channel.send(embed = embed)
+            await ctx.channel.send(embed = discord.Embed(title = '',
+                description = f'<@{who.id}> 님을 {self.Duration2text(timedelta(seconds = seconds))}동안 유배했습니다.'))
         self.AutoForgiver.restart()
 
     @commands.command(name = 'forgive')
@@ -65,13 +64,10 @@ class Core(DBCog):
         if who.id in self.DB:
             await ctx.channel.send(embed = discord.Embed(title = '', description = f'<@{who.id}> 님은 이미 유배중입니다.'))
             return False
-        nick = who.nick
-        if who.nick == None: await who.edit(nick = '[유배중] ' + who.name)
-        else: await who.edit(nick = '[유배중] ' + who.nick)
+        await who.edit(nick = '[유배중] ' + self.GetDisplayName(who))
         roles = []
         for role in who.roles:
-            if role.name in self.ModRoleNames:
-                roles.append(role)
+            if role.id in self.DB['ModRoles']: roles.append(role)
         await who.remove_roles(*roles[::-1])
         roles = list(map(lambda role: role.id, roles))
         self.DB[who.id] = {'channel' : ctx.channel.id, 'nick' : nick, 'roles' : roles, 'expire' : None}

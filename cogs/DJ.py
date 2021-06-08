@@ -20,9 +20,9 @@ def check_dj(func):
 class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'DJ'
-        DBCog.__init__(self, app)
         self.playlist = []
         self.vc = None
+        DBCog.__init__(self, app)
 
     def initDB(self):
         self.DB['channel'] = None
@@ -57,7 +57,6 @@ class Core(DBCog):
     async def _add(self, ctx, *title):
         if len(title) == 0: return
         song = await self.ydl(title[0])
-        title = list(title)
         video = VideosSearch(' '.join(title), limit = 1).result()['result']
         if len(video) == 0: return
         video = video[0]
@@ -67,11 +66,10 @@ class Core(DBCog):
 
     @DJGroup.command(name = 'remove')
     @check_dj
-    async def remove(self, ctx, index):
+    async def remove(self, ctx, index: int):
         try:
-            index = int(index)
             await ctx.send(embed = discord.Embed(title = '대기열에 곡이 삭제되었습니다', description = self.playlist[index][0]['title']))
-            self.playlist.pop(int(index))
+            self.playlist.pop(index)
         except: pass
 
     @DJGroup.command(name = 'queue')

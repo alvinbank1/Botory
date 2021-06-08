@@ -1,16 +1,15 @@
 import discord
 from discord.ext import commands
-from pkgs.DBCog import DBCog
-from pkgs.GlobalDB import GlobalDB
-from pkgs.Scheduler import *
+from StudioBot.pkgs.DBCog import DBCog
+from datetime import datetime
+from typing import Union
 
 class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'Reactor'
         DBCog.__init__(self, app)
 
-    def initDB(self):
-        self.DB = dict()
+    def initDB(self): return
 
     @commands.group(name = 'reactor')
     @commands.has_guild_permissions(administrator = True)
@@ -30,35 +29,32 @@ class Core(DBCog):
         self.DB[who.id]['emojis'] = emojis
 
     @ReactorGroup.command(name = 'set')
-    async def SetReact(self, ctx, who, *whats):
-        who = self.mention2member(who, ctx.guild)
+    async def SetReact(self, ctx, who: discord.Member, *whats):
         await self.SetReactDB(who, whats)
-        self.DB[who.id]['expire_at'] = None
+        self.DB[who.id]['expire'] = None
         embed = discord.Embed(title = '', description = f'<@{who.id}> 님께 자동 이모지가 등록되었습니다.')
         await ctx.channel.send(embed = embed)
 
     @ReactorGroup.command(name = "tempset")
-    async def SetTempReact(self, ctx, who, duration, *whats):
-        who = self.mention2member(who, ctx.guild)
+    async def SetTempReact(self, ctx, who: discord.Member, duration, *whats):
         await self.SetReactDB(who, whats)
-        embed = discord.Embed(title = '', description = f'<@{who.id}> 님께 {Duration(duration).to_kortext()}동안 자동 이모지가 등록되었습니다.')
-        self.DB[who.id]['expire_at'] = Schedule(duration)
+        durationtext = self.Duration2text(self.ParseDuration(duration))
+        embed = discord.Embed(title = '', description = f'<@{who.id}> 님께 {durationtext}동안 자동 이모지가 등록되었습니다.')
+        self.DB[who.id]['expire'] = datetime.now() + self.ParseDuration(duration)
         await ctx.channel.send(embed = embed)
 
     @ReactorGroup.command(name = "unset")
-    async def UnsetReact(self, ctx, who):
+    async def UnsetReact(self, ctx, who: Union[str, discord.Member]):
         if who == "all": self.DB = dict()
-        else:
-            who = self.mention2member(who, ctx.guild)
-            del self.DB[who.id]
+        else: del self.DB[who.id]
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.guild.id != GlobalDB['StoryGuildID']: return
         if message.author.id in self.DB:
-            expiration = self.DB[message.author.id]['expire_at']
+            expiration = self.DB[message.author.id]['expire']
             if expiration:
-                if expiration.is_done():
+                if expiration <= datetime.now():
                     del self.DB[message.author.id]
                     return
             emojis = self.DB[message.author.id]['emojis']

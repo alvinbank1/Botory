@@ -1,3 +1,3 @@
-from StudioBot.cogs.StudioLink
+from StudioBot.cogs.StudioLink import Core
 
-class Core(StudioLink): pass
+class Core(Core): pass

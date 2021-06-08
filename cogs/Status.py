@@ -1,7 +1,6 @@
 import discord, asyncio
 from discord.ext import commands, tasks
-from pkgs.GlobalDB import GlobalDB
-from pkgs.DBCog import DBCog
+from StudioBot.pkgs.DBCog import DBCog
 from PIL import Image, ImageDraw, ImageFont
 import uuid, os
 from concurrent.futures import ProcessPoolExecutor
@@ -14,7 +13,6 @@ class Core(DBCog):
         DBCog.__init__(self, app)
 
     def initDB(self):
-        self.DB = dict()
         self.DB['AllCount'] = None
         self.DB['MemberCount'] = None
         self.DB['BoostCount'] = None
@@ -35,12 +33,11 @@ class Core(DBCog):
             await ctx.channel.send('Status Manager\nSubcommands : setimg, setup')
 
     @StatusGroup.command(name = 'setup')
-    async def StatusSetup(self, ctx, CategoryID):
-        SetupCategory = discord.utils.get(ctx.guild.categories, id = int(CategoryID))
-        self.DB['AllCount'] = await SetupCategory.create_voice_channel('전체 멤버 - 측정중🔄')
-        self.DB['MemberCount'] = await SetupCategory.create_voice_channel('정식 멤버 - 측정중🔄')
+    async def StatusSetup(self, ctx, category: discord.CategoryChannel):
+        self.DB['AllCount'] = await category.create_voice_channel('전체 멤버 - 측정중🔄')
+        self.DB['MemberCount'] = await category.create_voice_channel('정식 멤버 - 측정중🔄')
         MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
-        self.DB['BoostCount'] = await SetupCategory.create_text_channel('부스터 측정중🔄', overwrites = {
+        self.DB['BoostCount'] = await category.create_text_channel('부스터 측정중🔄', overwrites = {
                 ctx.guild.default_role: discord.PermissionOverwrite(read_messages = False),
                 MemberRole: discord.PermissionOverwrite(read_messages = True, send_messages = False, add_reactions = False)
             })
@@ -56,8 +53,7 @@ class Core(DBCog):
             await ctx.send(f'send {name}')
             reply = await self.app.wait_for('message', check = checker)
             filename = f'{uuid.uuid4().hex}.png'
-            with open(filename, 'wb') as fp:
-                await reply.attachments[0].save(fp)
+            with open(filename, 'wb') as fp: await reply.attachments[0].save(fp)
             self.DB['images'][name] = Image.open(filename).convert('RGBA')
             os.remove(filename)
         self.BoostStatus.restart()
@@ -90,18 +86,18 @@ class Core(DBCog):
 
     async def SendBoostMsgs(self):
         boosters = self.guild.premium_subscribers
+        db = []
+        for key in self.DB['images']:
+            img = BytesIO()
+            self.DB['images'][key].save(img, 'png')
+            db.append((key, img))
+        db = tuple(db)
+        _bs = []
+        for who in boosters:
+            _bs.append((str(who.avatar_url), self.GetDisplayName(who)))
+        _bs = tuple(_bs)
+        func = partial(self.GenImages, db, _bs)
         with ProcessPoolExecutor() as pool:
-            db = []
-            for key in self.DB['images']:
-                img = BytesIO()
-                self.DB['images'][key].save(img, 'png')
-                db.append((key, img))
-            db = tuple(db)
-            _bs = []
-            for who in boosters:
-                _bs.append((str(who.avatar_url), self.GetDisplayName(who)))
-            _bs = tuple(_bs)
-            func = partial(self.GenImages, db, _bs)
             imagepaths = await self.app.loop.run_in_executor(pool, func)
         files = []
         for path in imagepaths:

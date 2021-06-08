@@ -29,7 +29,7 @@ class Core(DBCog):
     @commands.Cog.listener('on_message')
     @SkipCheck
     async def ModShouldBeOnline(self, message):
-        if '경찰' in map(lambda x: x.name, message.author.roles) and message.author.status == discord.Status.offline:
+        if message.author.permissions_in(message.channel).manage_messages and not message.author.administrator:
             await message.channel.send(f'<@{message.author.id}> 관리자께서는 되도록이면 오프라인 상태를 해제하여 관리활동 중임을 표시해주세요.', delete_after = 10.0)
 
     @commands.Cog.listener('on_message')
@@ -47,8 +47,8 @@ class Core(DBCog):
             await reaction.clear()
             await self.MiddleFingerReport(user.id, reaction.message.channel)
 
-    async def MiddleFingerReport(self, UserID, channel):
+    async def MiddleFingerReport(self, user: discord.User, channel):
         ReportChannel = channel.guild.get_channel(self.DB['ReportChannel'])
-        await channel.send(f'<@{UserID}> 중지 절단 완료.')
+        await channel.send(f'<@{user.id}> 중지 절단 완료.')
         if ReportChannel:
-            await ReportChannel.send(f'<@{UserID}> 이 사용자 중지 이모지 사용으로 경고바랍니다.', allowed_mentions = discord.AllowedMentions.none())
+            await ReportChannel.send(f'<@{user.id}> 이 사용자 중지 이모지 사용으로 경고바랍니다.', allowed_mentions = discord.AllowedMentions.none())

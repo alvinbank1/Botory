@@ -4,8 +4,7 @@ from pkgs.DBCog import DBCog
 from pkgs.GlobalDB import GlobalDB
 from pkgs.Scheduler import Schedule
 from PIL import Image, ImageDraw, ImageFont
-import random, uuid, os, asyncio, requests
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class Toto:
     def __init__(self, title, desc, team0, team1, guild, cog):
@@ -40,37 +39,36 @@ class Toto:
 class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'Toto'
-        DBCog.__init__(self, app)
         self.TopRankMessage = None
         self.LastRaid = None
+        DBCog.__init__(self, app)
+        self.DB = self.GetGlobalDB('Money')
 
     def initDB(self):
-        self.DB = dict()
-        self.DB['BankChannel'] = None
         self.DB['TotoChannel'] = None
         self.DB['RaidChannel'] = None
-        self.DB['mns'] = dict()
-        self.DB['RichRole'] = None
-        self.DB['RichPivot'] = None
-        self.DB['flag'] = dict()
+
+    @TotoGroup.command(name = 'totosetup')
+    @commands.has_guild_permissions(administrator = True)
+    async def Setup(self, ctx, category: discord.CategoryChannel):
+        TotoChannel = await category.create_text_channel('토토')
+        self.DB['TotoChannel'] = TotoChannel.id
+        MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
+        await TotoChannel.edit(sync_permissions = True)
+        await TotoChannel.set_permissions(MemberRole, send_messages = False)
+
+    @commands.command(name = 'setraidhere')
+    @commands.has_guild_permissions(administrator = True)
+    async def SetRaidHere(self, ctx, category: discord.CategoryChannel):
+        if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        await ctx.message.delete()
+        self.DB['RaidChannel'] = ctx.channel.id
 
     @commands.group(name = 'toto')
     @commands.has_guild_permissions(administrator = True)
     async def TotoGroup(self, ctx):
-        await ctx.message.delete()
         if ctx.guild.id != GlobalDB['StoryGuildID']: return
-
-    @TotoGroup.command(name = 'setup')
-    async def Setup(self, ctx, CategoryID):
-        Category = ctx.guild.get_channel(int(CategoryID))
-        BankChannel = await Category.create_text_channel('계좌확인')
-        TotoChannel = await Category.create_text_channel('토토')
-        self.DB['BankChannel'] = BankChannel.id
-        self.DB['TotoChannel'] = TotoChannel.id
-        MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
-        await BankChannel.edit(sync_permissions = True, topic = '&money 를 쳐서 잔액을 확인하세요! 채팅을 치다보면 1분마다 도토리를 50개씩 얻을 수 있습니다.')
-        await TotoChannel.edit(sync_permissions = True)
-        await TotoChannel.set_permissions(MemberRole, send_messages = False)
+        await ctx.message.delete()
 
     @TotoGroup.command(name = 'new')
     async def NewToto(self, ctx, title, desc, team0, team1):
@@ -182,180 +180,8 @@ class Core(DBCog):
         await ctx.send(embed = embed)
         del(self.toto)
 
-    @commands.command(name = 'money')
-    async def GetRank(self, ctx, arg = None):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        if ctx.channel.id != self.DB['BankChannel']: return
-        who = ctx.author
-        if arg and ctx.author.guild_permissions.administrator: who = self.mention2member(arg, ctx.guild)
-        img = self._makerankone(who)
-        imgname = uuid.uuid4().hex + '.png'
-        img.save(imgname)
-        with open(imgname, 'rb') as fp:
-            await ctx.send(file = discord.File(fp), delete_after = 10.0)
-        os.remove(imgname)
-
     @commands.Cog.listener()
-    async def on_ready(self):
-        await self.ClearChannel()
-        self.TopRankMsg.start()
-        self.AutoRole.start()
-        self.FeverRaid.start()
-
-    async def ClearChannel(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        RankChannel = guild.get_channel(self.DB['BankChannel'])
-        await RankChannel.delete_messages(await RankChannel.history(limit = 100).flatten())
-
-    @tasks.loop(minutes = 10)
-    async def TopRankMsg(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        RankChannel = guild.get_channel(self.DB['BankChannel'])
-        if RankChannel == None: return
-        img = self.makerankimg()
-        imgname = uuid.uuid4().hex + '.png'
-        img.save(imgname)
-        with open(imgname, 'rb') as fp:
-            try: await self.TopRankMessage.delete()
-            except: pass
-            self.TopRankMessage = await RankChannel.send(file = discord.File(fp))
-        os.remove(imgname)
-
-    def makerankimg(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        lst = []
-        for key in self.DB['mns']: lst.append([self.DB['mns'][key], key])
-        lst.sort(reverse = True)
-        res = Image.new("RGB", (1480 * 2 + 20, 280 * 10 + 20), (50, 50, 50))
-        i = 0
-        for elem in lst:
-            if i > 19: break
-            who = guild.get_member(elem[1])
-            if who == None: continue
-            one = self._makerankone(who, i + 1) 
-            res.paste(one, ((i // 10) * 1480, (i % 10) * 280))
-            i += 1
-        return res
-
-    def _makerankone(self, who, rank = None):
-        money = 0
-        if who.id in self.DB['mns']: money = self.DB['mns'][who.id]
-        if rank == None: 
-            guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-            rank = 1
-            for key in self.DB['mns']:
-                if guild.get_member(key) == None: continue
-                if self.DB['mns'][key] > money: rank += 1
-
-        res = Image.new("RGB", (1500, 300), (50, 50, 50))
-        canvas = ImageDraw.Draw(res)
-        canvas.rectangle((0, 0, 1500, 300), outline = (70, 70, 70), width = 20)
-        canvas.text((1150, 120), '도토리', font = ImageFont.truetype('NanumGothic.ttf', 30), fill = (140, 140, 140), align = 'center', anchor = 'mm')
-
-        if rank < 4: rankcolor = [(212, 175, 55), (208, 208, 208), (138, 84, 30)][rank - 1]
-        else: rankcolor = (100, 100, 100)
-        darkercolor = tuple(c - 20 for c in rankcolor)
-        canvas.ellipse((75, 75, 225, 225), fill = rankcolor, width = 12, outline = darkercolor)
-        canvas.text((150, 150), str(rank), font = ImageFont.truetype('NanumGothic.ttf', 90), fill = (255, 255, 255),
-            anchor = 'mm', stroke_width = 4, stroke_fill = (0, 0, 0))
-     
-        name = self.GetDisplayName(who)
-        if len(name) > 10: name = name[:9] + '...'
-        canvas.text((450, 150), name, font = ImageFont.truetype('NanumGothic.ttf', 60), fill = (255, 255, 255), anchor = 'lm')
-        moneystr = str(money)
-        if len(moneystr) > 3: moneystr = '%.1fk'%(money / 1000)
-        if len(moneystr) > 6: moneystr = '%.1fM'%(money / 1000 ** 2)
-        canvas.text((1150, 165), moneystr, font = ImageFont.truetype('NanumGothic.ttf', 48), fill = (255, 255, 255), anchor = 'mm')
-
-        res.convert('RGBA')
-        profile = Image.open(requests.get(who.avatar_url, stream = True).raw)
-        profile = profile.resize((120, 120))
-        mask = Image.new('L', (120, 120), 0)
-        mcanvas = ImageDraw.Draw(mask)
-        mcanvas.ellipse((0, 0, 120, 120), fill = 255)
-        res.paste(profile, (300, 90), mask = mask)
-        return res
-
-    @commands.command(name = 'givemoney')
-    @commands.has_guild_permissions(administrator = True)
-    async def GiveMoney(self, ctx, who, val):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        who = self.mention2member(who, ctx.guild)
-        if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
-        self.DB['mns'][who.id] += int(val)
-        embed = discord.Embed(title = '', description = f'<@{who.id}> 님께 도토리 {val}개가 지급되었습니다.')
-        await ctx.channel.send(embed = embed)
-
-    @commands.command(name = 'takemoney')
-    @commands.has_guild_permissions(administrator = True)
-    async def TakeMoney(self, ctx, who, val):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        who = self.mention2member(who, ctx.guild)
-        if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
-        val = min([self.DB['mns'][who.id], int(val)])
-        self.DB['mns'][who.id] -= val
-        embed = discord.Embed(title = '', description = f'<@{who.id}> 님에게서 도토리 {val}개가 제거되었습니다.')
-        await ctx.channel.send(embed = embed)
-
-    @commands.command(name = 'setrichrole')
-    @commands.has_guild_permissions(administrator = True)
-    async def SetRole(self, ctx, role, val):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        role = self.mention2role(role, ctx.guild)
-        self.DB['RichRole'] = role.id
-        self.DB['RichPivot'] = int(val)
-
-    @commands.command(name = 'setraidhere')
-    @commands.has_guild_permissions(administrator = True)
-    async def SetRaid(self, ctx):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        self.DB['RaidChannel'] = ctx.channel.id
-
-    @commands.Cog.listener('on_message')
-    async def messageXP(self, message):
-        if message.guild.id != GlobalDB['StoryGuildID']: return
-        if message.author.bot: return
-        if message.channel.id in (self.DB['BankChannel'], self.DB['TotoChannel']): return
-        whoid = message.author.id
-        if whoid not in self.DB['flag']: self.DB['flag'][whoid] = Schedule('0s')
-        if self.DB['flag'][whoid].is_done():
-            if whoid not in self.DB['mns']: self.DB['mns'][whoid] = 0
-            self.DB['mns'][whoid] += 50
-            self.DB['flag'][whoid] = Schedule('1m')
-
-    @commands.Cog.listener('on_message')
-    async def nomsginrank(self, message):
-        if message.guild.id != GlobalDB['StoryGuildID']: return
-        if message.channel.id != self.DB['BankChannel']: return
-        if message.author.id == self.app.user.id: return
-        ctx = await self.app.get_context(message)
-        if not ctx.valid: await message.delete()
-
-    @tasks.loop(minutes = 10)
-    async def AutoRole(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        richRole = guild.get_role(self.DB['RichRole'])
-        if richRole == None: return
-        lst = []
-        for key in self.DB['mns']:
-            if guild.get_member(key):
-                lst.append([self.DB['mns'][key], key])
-        lst.sort(reverse = True)
-        if lst: lst[0].append(1)
-        for i in range(1, len(lst)):
-            lst[i].append(lst[i - 1][2])
-            if lst[i - 1][0] > lst[i][0]: lst[i][2] += 1
-        for elem in lst:
-            who = guild.get_member(elem[1])
-            is_rich = elem[2] <= self.DB['RichPivot']
-            has_rich = richRole in who.roles
-            if is_rich and not has_rich: await who.add_roles(richRole)
-            if not is_rich and has_rich: await who.remove_roles(richRole)
+    async def on_ready(self): self.FeverRaid.start()
 
     @tasks.loop(minutes = 3)
     async def FeverRaid(self):
