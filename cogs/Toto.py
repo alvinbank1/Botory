@@ -1,11 +1,9 @@
 import discord
 from discord.ext import commands, tasks
-from pkgs.DBCog import DBCog
-from pkgs.GlobalDB import GlobalDB
-from pkgs.Scheduler import Schedule
+from StudioBot.pkgs.DBCog import DBCog
 from PIL import Image, ImageDraw, ImageFont
-import random, uuid, os, asyncio, requests
-from datetime import datetime, timedelta
+from datetime import datetime
+import random, asyncio
 
 class Toto:
     def __init__(self, title, desc, team0, team1, guild, cog):
@@ -40,37 +38,37 @@ class Toto:
 class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'Toto'
-        DBCog.__init__(self, app)
         self.TopRankMessage = None
         self.LastRaid = None
+        DBCog.__init__(self, app)
 
     def initDB(self):
-        self.DB = dict()
-        self.DB['BankChannel'] = None
         self.DB['TotoChannel'] = None
         self.DB['RaidChannel'] = None
-        self.DB['mns'] = dict()
-        self.DB['RichRole'] = None
-        self.DB['RichPivot'] = None
-        self.DB['flag'] = dict()
+
+    @commands.command(name = 'totosetup')
+    @commands.has_guild_permissions(administrator = True)
+    async def Setup(self, ctx, category: discord.CategoryChannel):
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
+        await ctx.message.delete()
+        TotoChannel = await category.create_text_channel('토토')
+        self.DB['TotoChannel'] = TotoChannel.id
+        MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
+        await TotoChannel.edit(sync_permissions = True)
+        await TotoChannel.set_permissions(MemberRole, send_messages = False)
+
+    @commands.command(name = 'setraidhere')
+    @commands.has_guild_permissions(administrator = True)
+    async def SetRaidHere(self, ctx, category: discord.CategoryChannel):
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
+        await ctx.message.delete()
+        self.DB['RaidChannel'] = ctx.channel.id
 
     @commands.group(name = 'toto')
     @commands.has_guild_permissions(administrator = True)
     async def TotoGroup(self, ctx):
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-
-    @TotoGroup.command(name = 'setup')
-    async def Setup(self, ctx, CategoryID):
-        Category = ctx.guild.get_channel(int(CategoryID))
-        BankChannel = await Category.create_text_channel('계좌확인')
-        TotoChannel = await Category.create_text_channel('토토')
-        self.DB['BankChannel'] = BankChannel.id
-        self.DB['TotoChannel'] = TotoChannel.id
-        MemberRole = discord.utils.get(ctx.guild.roles, name = '멤버')
-        await BankChannel.edit(sync_permissions = True, topic = '&money 를 쳐서 잔액을 확인하세요! 채팅을 치다보면 1분마다 도토리를 50개씩 얻을 수 있습니다.')
-        await TotoChannel.edit(sync_permissions = True)
-        await TotoChannel.set_permissions(MemberRole, send_messages = False)
 
     @TotoGroup.command(name = 'new')
     async def NewToto(self, ctx, title, desc, team0, team1):
@@ -101,14 +99,18 @@ class Core(DBCog):
         if message.author.id == self.app.user.id: return
         await message.delete()
         TotoChannel, msg = message.channel, message
+        balance = self.GetGlobalDB('Money')['mns'].get(msg.author.id, 0)
         try: val = int(msg.content)
-        except: return
+        except:
+            sgn = 1 if val[0] == '+' else -1
+            if val[1:] == 'all': val = sgn * balance
+            elif val[1:] == '0.5': val = sgn * (balance // 2)
         if val == 0:
             for i in range(2):
                 if msg.author.id in self.toto.bet[i]: del(self.toto.bet[i][msg.author.id])
             await TotoChannel.send(f'<@{msg.author.id}>님 베팅 취소되었습니다.', delete_after = 3.0)
             return
-        if msg.author.id not in self.DB['mns'] or abs(val) > self.DB['mns'][msg.author.id]:
+        if abs(val) > balance:
             await TotoChannel.send(f'<@{msg.author.id}>님 도토리가 부족하여 베팅 취소되었습니다.', delete_after = 3.0)
             return
         val, index = abs(val), int(val < 0)
@@ -134,10 +136,12 @@ class Core(DBCog):
                 },
                 {
                     'name' : '베팅 방법',
-                    'value' : '+숫자 혹은 -숫자 치시면 됩니다. 가장 마지막으로 베팅한 것만 적용되며 0을 입력하면 베팅이 취소됩니다.\n' +
+                    'value' : '+숫자 혹은 -숫자 혹은 특수코드 치시면 됩니다. 가장 마지막으로 베팅한 것만 적용되며 0을 입력하면 베팅이 취소됩니다.\n' +
                         '예시)\n' +
                         '`+1000` -> :regional_indicator_a:에 1000개 베팅\n' + 
                         '`-2000` -> :regional_indicator_b:에 2000개 베팅\n' + 
+                        '`-all` -> :regional_indicator_b:에 올인\n' + 
+                        '`+0.5` -> :regional_indicator_a:에 재산의 절반 베팅\n' + 
                         '`0` -> 베팅취소'
                 },
                 {
@@ -162,13 +166,13 @@ class Core(DBCog):
     async def EndToto(self, ctx, result):
         winindex = int(result in ('b', 'B'))
         winners, losers = self.toto.bet[::[1, -1][winindex]]
-        for loser in losers: self.DB['mns'][loser] -= losers[loser]
+        for loser in losers: self.GetGlobalDB('Money')['mns'][loser] -= losers[loser]
         prop = self.toto.getprop(winindex)
         if prop < 0:
             embed = discord.Embed(title = self.toto.title, description = '토토가 종료되었습니다!')
             embed.add_field(name = '토토 결과', value = f'{result} 승리!\n아무도 돈을 얻지 못했습니다!')
         else:
-            for winner in winners: self.DB['mns'][winner] += int(winners[winner] * prop)
+            for winner in winners: self.GetGlobalDB('Money')['mns'][winner] += int(winners[winner] * prop)
             embed = discord.Embed(title = self.toto.title, description = '토토가 종료되었습니다!')
             embed.add_field(name = '토토 결과', value = f'{result} 승리!\n{len(winners)}명의 참가자가 건 도토리의 %.2f배 이득을 보았습니다!'%(prop + 1))
             maxwho, maxbet = self.toto.getmax(winindex)
@@ -182,184 +186,12 @@ class Core(DBCog):
         await ctx.send(embed = embed)
         del(self.toto)
 
-    @commands.command(name = 'money')
-    async def GetRank(self, ctx, arg = None):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        if ctx.channel.id != self.DB['BankChannel']: return
-        who = ctx.author
-        if arg and ctx.author.guild_permissions.administrator: who = self.mention2member(arg, ctx.guild)
-        img = self._makerankone(who)
-        imgname = uuid.uuid4().hex + '.png'
-        img.save(imgname)
-        with open(imgname, 'rb') as fp:
-            await ctx.send(file = discord.File(fp), delete_after = 10.0)
-        os.remove(imgname)
-
     @commands.Cog.listener()
-    async def on_ready(self):
-        await self.ClearChannel()
-        self.TopRankMsg.start()
-        self.AutoRole.start()
-        self.FeverRaid.start()
-
-    async def ClearChannel(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        RankChannel = guild.get_channel(self.DB['BankChannel'])
-        await RankChannel.delete_messages(await RankChannel.history(limit = 100).flatten())
-
-    @tasks.loop(minutes = 10)
-    async def TopRankMsg(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        RankChannel = guild.get_channel(self.DB['BankChannel'])
-        if RankChannel == None: return
-        img = self.makerankimg()
-        imgname = uuid.uuid4().hex + '.png'
-        img.save(imgname)
-        with open(imgname, 'rb') as fp:
-            try: await self.TopRankMessage.delete()
-            except: pass
-            self.TopRankMessage = await RankChannel.send(file = discord.File(fp))
-        os.remove(imgname)
-
-    def makerankimg(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        lst = []
-        for key in self.DB['mns']: lst.append([self.DB['mns'][key], key])
-        lst.sort(reverse = True)
-        res = Image.new("RGB", (1480 * 2 + 20, 280 * 10 + 20), (50, 50, 50))
-        i = 0
-        for elem in lst:
-            if i > 19: break
-            who = guild.get_member(elem[1])
-            if who == None: continue
-            one = self._makerankone(who, i + 1) 
-            res.paste(one, ((i // 10) * 1480, (i % 10) * 280))
-            i += 1
-        return res
-
-    def _makerankone(self, who, rank = None):
-        money = 0
-        if who.id in self.DB['mns']: money = self.DB['mns'][who.id]
-        if rank == None: 
-            guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-            rank = 1
-            for key in self.DB['mns']:
-                if guild.get_member(key) == None: continue
-                if self.DB['mns'][key] > money: rank += 1
-
-        res = Image.new("RGB", (1500, 300), (50, 50, 50))
-        canvas = ImageDraw.Draw(res)
-        canvas.rectangle((0, 0, 1500, 300), outline = (70, 70, 70), width = 20)
-        canvas.text((1150, 120), '도토리', font = ImageFont.truetype('NanumGothic.ttf', 30), fill = (140, 140, 140), align = 'center', anchor = 'mm')
-
-        if rank < 4: rankcolor = [(212, 175, 55), (208, 208, 208), (138, 84, 30)][rank - 1]
-        else: rankcolor = (100, 100, 100)
-        darkercolor = tuple(c - 20 for c in rankcolor)
-        canvas.ellipse((75, 75, 225, 225), fill = rankcolor, width = 12, outline = darkercolor)
-        canvas.text((150, 150), str(rank), font = ImageFont.truetype('NanumGothic.ttf', 90), fill = (255, 255, 255),
-            anchor = 'mm', stroke_width = 4, stroke_fill = (0, 0, 0))
-     
-        name = self.GetDisplayName(who)
-        if len(name) > 10: name = name[:9] + '...'
-        canvas.text((450, 150), name, font = ImageFont.truetype('NanumGothic.ttf', 60), fill = (255, 255, 255), anchor = 'lm')
-        moneystr = str(money)
-        if len(moneystr) > 3: moneystr = '%.1fk'%(money / 1000)
-        if len(moneystr) > 6: moneystr = '%.1fM'%(money / 1000 ** 2)
-        canvas.text((1150, 165), moneystr, font = ImageFont.truetype('NanumGothic.ttf', 48), fill = (255, 255, 255), anchor = 'mm')
-
-        res.convert('RGBA')
-        profile = Image.open(requests.get(who.avatar_url, stream = True).raw)
-        profile = profile.resize((120, 120))
-        mask = Image.new('L', (120, 120), 0)
-        mcanvas = ImageDraw.Draw(mask)
-        mcanvas.ellipse((0, 0, 120, 120), fill = 255)
-        res.paste(profile, (300, 90), mask = mask)
-        return res
-
-    @commands.command(name = 'givemoney')
-    @commands.has_guild_permissions(administrator = True)
-    async def GiveMoney(self, ctx, who, val):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        who = self.mention2member(who, ctx.guild)
-        if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
-        self.DB['mns'][who.id] += int(val)
-        embed = discord.Embed(title = '', description = f'<@{who.id}> 님께 도토리 {val}개가 지급되었습니다.')
-        await ctx.channel.send(embed = embed)
-
-    @commands.command(name = 'takemoney')
-    @commands.has_guild_permissions(administrator = True)
-    async def TakeMoney(self, ctx, who, val):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        who = self.mention2member(who, ctx.guild)
-        if who.id not in self.DB['mns']: self.DB['mns'][who.id] = 0
-        val = min([self.DB['mns'][who.id], int(val)])
-        self.DB['mns'][who.id] -= val
-        embed = discord.Embed(title = '', description = f'<@{who.id}> 님에게서 도토리 {val}개가 제거되었습니다.')
-        await ctx.channel.send(embed = embed)
-
-    @commands.command(name = 'setrichrole')
-    @commands.has_guild_permissions(administrator = True)
-    async def SetRole(self, ctx, role, val):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        role = self.mention2role(role, ctx.guild)
-        self.DB['RichRole'] = role.id
-        self.DB['RichPivot'] = int(val)
-
-    @commands.command(name = 'setraidhere')
-    @commands.has_guild_permissions(administrator = True)
-    async def SetRaid(self, ctx):
-        await ctx.message.delete()
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
-        self.DB['RaidChannel'] = ctx.channel.id
-
-    @commands.Cog.listener('on_message')
-    async def messageXP(self, message):
-        if message.guild.id != GlobalDB['StoryGuildID']: return
-        if message.author.bot: return
-        if message.channel.id in (self.DB['BankChannel'], self.DB['TotoChannel']): return
-        whoid = message.author.id
-        if whoid not in self.DB['flag']: self.DB['flag'][whoid] = Schedule('0s')
-        if self.DB['flag'][whoid].is_done():
-            if whoid not in self.DB['mns']: self.DB['mns'][whoid] = 0
-            self.DB['mns'][whoid] += 50
-            self.DB['flag'][whoid] = Schedule('1m')
-
-    @commands.Cog.listener('on_message')
-    async def nomsginrank(self, message):
-        if message.guild.id != GlobalDB['StoryGuildID']: return
-        if message.channel.id != self.DB['BankChannel']: return
-        if message.author.id == self.app.user.id: return
-        ctx = await self.app.get_context(message)
-        if not ctx.valid: await message.delete()
-
-    @tasks.loop(minutes = 10)
-    async def AutoRole(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
-        richRole = guild.get_role(self.DB['RichRole'])
-        if richRole == None: return
-        lst = []
-        for key in self.DB['mns']:
-            if guild.get_member(key):
-                lst.append([self.DB['mns'][key], key])
-        lst.sort(reverse = True)
-        if lst: lst[0].append(1)
-        for i in range(1, len(lst)):
-            lst[i].append(lst[i - 1][2])
-            if lst[i - 1][0] > lst[i][0]: lst[i][2] += 1
-        for elem in lst:
-            who = guild.get_member(elem[1])
-            is_rich = elem[2] <= self.DB['RichPivot']
-            has_rich = richRole in who.roles
-            if is_rich and not has_rich: await who.add_roles(richRole)
-            if not is_rich and has_rich: await who.remove_roles(richRole)
+    async def on_ready(self): self.FeverRaid.start()
 
     @tasks.loop(minutes = 3)
     async def FeverRaid(self):
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])        
+        guild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
         if RaidChannel == None: return
         try:
@@ -384,15 +216,40 @@ class Core(DBCog):
         if len(self.raiders) == 0:
             if prize < 4000: desc = f'아무도 도토리 {prize}개를 획득하지 못하셨습니다!'
             else: desc = f'아무도 레이드를 성공하지 못했습니다!\n무려 {prize}개짜리였는데!'
-        else:
-            for raider in self.raiders:
+            await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
+            return
+        self.raiders = list(self.raiders)
+        random.shuffle(self.raiders)
+        bonus = self.raiders[0]
+        boosts, normals = [], []
+        rewards = dict()
+        for raider in self.raiders[1:]:
+            if raider.premium_since: boosts.append(raider)
+            else: normals.append(raider)
+        embed = discord.Embed(title = '도토리 레이드 마감~~!', description = '')
+        if len(normals) > 0:
+            desc = ''
+            for raider in normals:
+                rewards[raider.id] = prize
                 dispname = self.GetDisplayName(raider)
                 desc += dispname + ', '
-            desc = f'{desc[:-2]}\n\n도토리 {prize}개를 획득하셨습니다!'
-        await self.RaidMessage.edit(embed = discord.Embed(title = '도토리 레이드 마감~~!', description = desc))
-        for user in self.raiders:
-            if user.id not in self.DB['mns']: self.DB['mns'][user.id] = 0
-            self.DB['mns'][user.id] += prize
+            embed.add_field(name = f'{prize}개 획득 성공!', value = desc[:-2], inline = False)
+        if len(boosts) > 0:
+            desc = ''
+            for raider in boosts:
+                rewards[raider.id] = 2 * prize
+                dispname = self.GetDisplayName(raider)
+                desc += dispname + ', '
+            embed.add_field(name = f'부스터 2배 혜택으로 {2 * prize}개 획득 성공!', value = desc[:-2], inline = False)
+        if bonus.premium_since:
+            rewards[raider.id] = 4 * prize
+            embed.add_field(name = f'부스터 2배 혜택과 레이드 2배 당첨까지! {4 * prize}개 획득 성공!', value = self.GetDisplayName(bonus), inline = False)
+        else:
+            rewards[raider.id] = 2 * prize
+            embed.add_field(name = f'레이드 2배 당첨으로 {2 * prize}개 획득 성공!', value = self.GetDisplayName(bonus), inline = False)
+        await self.RaidMessage.edit(embed = embed)
+        for userid in rewards:
+            self.GetGlobalDB('Money')['mns'][userid] = self.GetGlobalDB('Money')['mns'].get(userid, 0) + rewards[userid]
 
     @commands.Cog.listener('on_reaction_add')
     async def onRaidReaction(self, reaction, user):

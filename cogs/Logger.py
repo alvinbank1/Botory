@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
-from pkgs.DBCog import DBCog
-from pkgs.GlobalDB import GlobalDB
+from StudioBot.pkgs.DBCog import DBCog
 from datetime import datetime, timezone, timedelta
 
 class Core(DBCog):
@@ -11,17 +10,15 @@ class Core(DBCog):
         DBCog.__init__(self, app)
 
     def initDB(self):
-        self.DB = dict()
         for ChannelName in self.LogChannelNames: self.DB[ChannelName] = None
 
     @commands.group(name = 'logger')
     @commands.has_guild_permissions(administrator = True)
     async def LoggerGroup(self, ctx):
-        if ctx.guild.id != GlobalDB['StoryGuildID']: return
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         await ctx.message.delete()
         if ctx.invoked_subcommand == None:
-            await ctx.channel.send('Logger system.\n'
-                + 'Subcommands : setcnl')
+            await ctx.channel.send('Logger system.\nSubcommands : setcnl')
 
     @LoggerGroup.command(name = 'setcnl')
     async def SetChannels(self, ctx, ChannelName = None):
@@ -32,7 +29,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.guild.id != GlobalDB['StoryGuildID']: return
+        if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.author.bot: return
         if len(message.attachments) and self.DB['Attachments']:
             files = [await attachment.to_file(spoiler = attachment.is_spoiler(), use_cached = True) for attachment in message.attachments]
@@ -49,7 +46,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_reaction_remove(self, reaction, user):
-        if reaction.message.guild.id != GlobalDB['StoryGuildID']: return
+        if reaction.message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if user.bot: return
         if self.DB['Reaction']:
             embed = discord.Embed(title = '',
