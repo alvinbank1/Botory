@@ -11,6 +11,7 @@ from functools import partial
 def check_dj(func):
     @wraps(func)
     async def wrapper(self, ctx, *args):
+        if ctx.guild == None: return
         if ctx.guild.id != self.GetGlobalDB['StoryGuildID']: return
         if ctx.author.guild_permissions.administrator: return await func(self, ctx, *args)
         role = ctx.guild.get_role(self.DB['role'])
