@@ -1,8 +1,6 @@
 import discord, asyncio
-from pkgs.DBCog import DBCog
-from pkgs.GlobalDB import GlobalDB
+from StudioBot.pkgs.DBCog import DBCog
 from discord.ext import commands
-import sys
 
 class Core(DBCog):
     def __init__(self, app):
@@ -10,14 +8,13 @@ class Core(DBCog):
         DBCog.__init__(self, app)
 
     def initDB(self):
-        self.DB = dict()
         self.DB['StopChannel'] = None
 
     @commands.Cog.listener()
     async def on_ready(self):
-        version = '2.8.4'
+        version = '3.0.0'
         await self.app.change_presence(activity = discord.Game(f'Botory {version} by Undec'))
-        guild = self.app.get_guild(GlobalDB['StoryGuildID'])
+        guild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])
         if self.DB['StopChannel']:
             StopChannel = guild.get_channel(self.DB['StopChannel'])
             await StopChannel.send(f'보토리 {version} is back.')

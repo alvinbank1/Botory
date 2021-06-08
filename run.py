@@ -1,23 +1,21 @@
 import discord, sys, os, pickle
 from discord.ext import commands
-from pkgs import GlobalDB
+from StudioBot.pkgs.DBCog import GDB
 import cogs
 
 app = commands.Bot(command_prefix = '&', intents = discord.Intents.all(), help_command = None)
 
 def main():
-    GlobalDB.loadDB()
-    cogs = InitCogs()
+    global GDB
+    GDB.requestDB('__global__')['StoryGuildID'] = 775210688183664640
+    InitCogs()
     app.run(GetToken())
-    for cog in cogs: cog.saveDB()
-    GlobalDB.saveDB()
+    GDB.saveall()
 
 def InitCogs():
-    res = []
     for CogName in cogs.__all__:
         __import__(f'cogs.{CogName}')
-        res.append(sys.modules[f'cogs.{CogName}'].Core(app))
-    return res
+        sys.modules[f'cogs.{CogName}'].Core(app)
 
 def GetToken():
     if os.path.isfile('token.db'):
