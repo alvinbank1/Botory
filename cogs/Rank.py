@@ -92,7 +92,7 @@ class Core(DBCog):
         return res
 
     async def GenRankFrame(self, who):
-        data = await self.GetInfo(who)
+        data = await self.GetInfo(who.id)
         func = partial(self.GenFrame, data)
         with ProcessPoolExecutor() as pool:
             res = await self.app.loop.run_in_executor(pool, func)
