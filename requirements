@@ -14,7 +14,7 @@ multidict==5.1.0
 Pillow==8.2.0
 rfc3986==1.5.0
 sniffio==1.2.0
-StudioBot==1.1.0
+StudioBot==1.2.0
 typing-extensions==3.10.0.0
 yarl==1.6.3
 youtube-dl==2021.6.6
