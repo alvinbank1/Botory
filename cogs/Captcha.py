@@ -13,6 +13,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
+        if member.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         try: channel = await asyncio.wait_for(member.create_dm(), timeout = 60.0)
         except:
             await member.kick(reason = 'CAPTCHA timeout')
