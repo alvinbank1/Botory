@@ -50,6 +50,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        if message.guild == None: return
         if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.author.id in self.DB:
             expiration = self.DB[message.author.id]['expire']
