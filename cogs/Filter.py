@@ -6,6 +6,7 @@ from functools import wraps
 def SkipCheck(func):
     @wraps(func)
     async def wrapper(self, message):
+        if message.guild == None: return
         if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.author.bot or message.author.guild_permissions.administrator: return
         return await func(self, message)
@@ -42,6 +43,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
+        if reaction.message.guild == None: return
         if reaction.message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if user.bot or user.guild_permissions.administrator: return
         if '🖕' in str(reaction.emoji):

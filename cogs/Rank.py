@@ -44,6 +44,7 @@ class Core(DBCog):
 
     @commands.command(name = 'rank')
     async def GetRank(self, ctx, arg: discord.Member = None):
+        if ctx.guild == None: return
         if ctx.guild.id != self.StoryGuild.id: return
         await ctx.message.delete()
         if ctx.channel.id != self.DB['channel']: return
@@ -195,6 +196,7 @@ class Core(DBCog):
 
     @commands.Cog.listener('on_message')
     async def messageXP(self, message):
+        if message.guild == None: return
         if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.author.bot: return
         if message.channel.id == self.DB['channel']: return
@@ -207,6 +209,7 @@ class Core(DBCog):
 
     @commands.Cog.listener('on_message')
     async def nomsginrank(self, message):
+        if message.guild == None: return
         if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.channel.id != self.DB['channel']: return
         if message.author.id == self.app.user.id: return

@@ -29,6 +29,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        if message.guild == None: return
         if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.author.bot: return
         if len(message.attachments) and self.DB['Attachments']:
@@ -46,6 +47,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_reaction_remove(self, reaction, user):
+        if reaction.message.guild == None: return
         if reaction.message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if user.bot: return
         if self.DB['Reaction']:
