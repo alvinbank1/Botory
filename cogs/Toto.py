@@ -39,12 +39,12 @@ class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'Toto'
         self.TopRankMessage = None
-        self.LastRaid = None
         DBCog.__init__(self, app)
 
     def initDB(self):
         self.DB['TotoChannel'] = None
         self.DB['RaidChannel'] = None
+        self.DB['LastRaid'] = None
 
     @commands.command(name = 'totosetup')
     @commands.has_guild_permissions(administrator = True)
@@ -189,20 +189,35 @@ class Core(DBCog):
     @commands.Cog.listener()
     async def on_ready(self): self.FeverRaid.start()
 
+    @commands.command(name = 'goraid')
+    @commands.has_guild_permissions(administrator = True)
+    async def GoRaid(self, ctx, prize = None):
+        self.prize = prize if prize else -1
+        self.FeverRaid.restart()
+
     @tasks.loop(minutes = 3)
     async def FeverRaid(self):
         guild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
         if RaidChannel == None: return
         try:
-            if (await RaidChannel.fetch_message(RaidChannel.last_message_id)).author.bot: return
-        except: pass
-        if random.random() >= 1 / 10: return
+            if self.prize: forceraid = True
+        except: forceraid = False
+        if not forceraid:
+            try:
+                if (await RaidChannel.fetch_message(RaidChannel.last_message_id)).author.bot: return
+            except: pass
+            if random.random() >= 1 / 10: return
         aww = discord.utils.get(guild.emojis, name = 'rage_aww')
-        prize = 2000
-        if self.LastRaid:
-            hdelta = (datetime.now() - self.LastRaid).total_seconds() / 3600
-            prize = max([int(hdelta * 4000), prize])
+        prize = -1
+        if forceraid:
+            prize = self.prize
+            del self.prize
+        if prize < 0:
+            prize = 2000
+            if self.DB['LastRaid']:
+                hdelta = (datetime.now() - self.DB['LastRaid']).total_seconds() / 3600
+                prize = max([int(hdelta * 4000), prize])
         self.RaidMessage = await RaidChannel.send(embed = discord.Embed(
             title = '도토리 레이드 도착!',
             description = f'15초 안에 아래 이모지를 눌러서 도토리 {prize}개를 받으세요!'))
@@ -210,7 +225,7 @@ class Core(DBCog):
         self.on_raid = True
         await self.RaidMessage.add_reaction(aww)
         await asyncio.sleep(15)
-        self.LastRaid = datetime.now()
+        self.DB['LastRaid'] = datetime.now()
         self.on_raid = False
         desc = ''
         if len(self.raiders) == 0:
@@ -242,10 +257,10 @@ class Core(DBCog):
                 desc += dispname + ', '
             embed.add_field(name = f'부스터 2배 혜택으로 {2 * prize}개 획득 성공!', value = desc[:-2], inline = False)
         if bonus.premium_since:
-            rewards[raider.id] = 4 * prize
+            rewards[bonus.id] = 4 * prize
             embed.add_field(name = f'부스터 2배 혜택과 레이드 2배 당첨까지! {4 * prize}개 획득 성공!', value = self.GetDisplayName(bonus), inline = False)
         else:
-            rewards[raider.id] = 2 * prize
+            rewards[bonus.id] = 2 * prize
             embed.add_field(name = f'레이드 2배 당첨으로 {2 * prize}개 획득 성공!', value = self.GetDisplayName(bonus), inline = False)
         await self.RaidMessage.edit(embed = embed)
         for userid in rewards:
@@ -258,5 +273,7 @@ class Core(DBCog):
         except: return
         if reaction.message != self.RaidMessage: return
         if user.bot: return
-        if reaction.emoji.name != 'rage_aww': return
+        try:
+            if reaction.emoji.name != 'rage_aww': return
+        except: return
         self.raiders.add(user)

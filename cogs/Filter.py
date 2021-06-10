@@ -39,7 +39,7 @@ class Core(DBCog):
     async def NoMiddleFinger(self, message):
         if '🖕' in message.content:
             await message.delete()
-            await self.MiddleFingerReport(message.author.id, message.channel)
+            await self.MiddleFingerReport(message.author, message.channel)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
@@ -48,9 +48,9 @@ class Core(DBCog):
         if user.bot or user.guild_permissions.administrator: return
         if '🖕' in str(reaction.emoji):
             await reaction.clear()
-            await self.MiddleFingerReport(user.id, reaction.message.channel)
+            await self.MiddleFingerReport(user, reaction.message.channel)
 
-    async def MiddleFingerReport(self, user: discord.User, channel):
+    async def MiddleFingerReport(self, user, channel):
         ReportChannel = channel.guild.get_channel(self.DB['ReportChannel'])
         await channel.send(f'<@{user.id}> 중지 절단 완료.')
         if ReportChannel:

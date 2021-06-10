@@ -12,7 +12,7 @@ def check_dj(func):
     @wraps(func)
     async def wrapper(self, ctx, *args):
         if ctx.guild == None: return
-        if ctx.guild.id != self.GetGlobalDB['StoryGuildID']: return
+        if ctx.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if ctx.author.guild_permissions.administrator: return await func(self, ctx, *args)
         role = ctx.guild.get_role(self.DB['role'])
         if role in ctx.author.roles: return await func(self, ctx, *args)
@@ -22,7 +22,7 @@ class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'DJ'
         self.playlist = []
-        self.vc = None
+        self.vc = self.flag = None
         DBCog.__init__(self, app)
 
     def initDB(self):
@@ -49,13 +49,13 @@ class Core(DBCog):
 
     @DJGroup.command(name = 'add')
     @check_dj
-    async def add(self, ctx, *title): await self._add(ctx, *title)
+    async def add(self, ctx, *title): await self._add(ctx, title)
 
     @DJGroup.command(name = 'ads')
     @check_dj
-    async def addsong(self, ctx, *title): await self._add(ctx, *(title + ['official audio only']))
+    async def addsong(self, ctx, *title): await self._add(ctx, list(title) + ['official audio only'])
 
-    async def _add(self, ctx, *title):
+    async def _add(self, ctx, title):
         if len(title) == 0: return
         song = await self.ydl(title[0])
         video = VideosSearch(' '.join(title), limit = 1).result()['result']
@@ -84,38 +84,31 @@ class Core(DBCog):
         except: embed = discord.Embed(title = '현재 재생중인 곡이 없습니다')
         await ctx.send('\n'.join(txt), embed = embed)
 
+    @tasks.loop()
+    async def AutoNext(self):
+        if not self.vc.is_playing():
+            if len(self.playlist) == 0: return
+            self.np, song = self.playlist[0]
+            self.playlist.pop(0)
+            self.vc.play(discord.FFmpegPCMAudio(source = song))
+
     @DJGroup.command(name = 'play')
     @check_dj
     async def play(self, ctx):
-        try:
+        if self.flag:
             self.vc.resume()
-            if self.flag: self.flag = False
+            self.AutoNext.start()
+            self.flag = False
             return
-        except: pass
-        await self.join(ctx)
         self.flag = False
-        while True:
-            await asyncio.sleep(0.1)
-            try:
-                if not self.flag and not self.vc.is_playing():
-                    try: os.remove(song)
-                    except: pass
-                    if len(self.playlist) == 0: continue
-                    self.np, song = self.playlist[0]
-                    self.playlist.pop(0)
-                    self.vc.play(discord.FFmpegPCMAudio(source = song))
-                if self.flag and self.vc.is_playing(): self.vc.pause()
-            except: break
-        os.system('rm *.mp3')
-        del(self.np)
-        del(self.flag)
+        self.AutoNext.start()
 
     @DJGroup.command(name = 'pause')
     @check_dj
     async def pause(self, ctx):
-        try:
-            if not self.flag: self.flag = True
-        except: pass
+        self.flag = True
+        self.AutoNext.stop()
+        self.vc.pause()
 
     @DJGroup.command(name = 'skip')
     @check_dj
@@ -129,6 +122,7 @@ class Core(DBCog):
         try:
             if not self.flag: self.flag = True
             self.playlist = []
+            self.AutoNext.stop()
             self.vc.stop()
             self.flag = False
             await self.vc.disconnected()
