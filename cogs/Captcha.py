@@ -9,11 +9,14 @@ class Core(DBCog):
     def __init__(self, app):
         self.CogName = 'Captcha'
         DBCog.__init__(self, app)
+        self.running = set()
 
     def initDB(self): return
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
+        if member.id in self.running: return
+        self.running.add(member.id)
         if member.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         channel = await member.create_dm()
         with ProcessPoolExecutor() as pool:
@@ -21,8 +24,13 @@ class Core(DBCog):
         with open(filename, 'rb') as fp: att = discord.File(fp)
         msg = None
         for i in range(12):
-            try: msg = await channel.send('30초 안에 아래 사진의 문자를 정확히 입력하지 않으면 강퇴됩니다. 영어 대문자로 구성되어있습니다.', file = att)
-            except: await asyncio.sleep(5)
+            try:
+                msg = await channel.send('' + 
+                    '30초 안에 아래 사진의 문자를 정확히 입력하지 않으면 강퇴됩니다.\n' +
+                    '영어 대문자로 구성되어있습니다.\n' +
+                    '반응이 없으면 틀려서 그런겁니다. O와 Q, 일그러진 D와 O 등을 잘 구분해보세요.', file = att)
+                break
+            except discord.HTTPException: await asyncio.sleep(5)
         os.remove(filename)
         try:
             if msg == None: raise asyncio.TimeoutError()

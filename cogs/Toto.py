@@ -192,7 +192,10 @@ class Core(DBCog):
     @commands.command(name = 'goraid')
     @commands.has_guild_permissions(administrator = True)
     async def GoRaid(self, ctx, prize = None):
-        self.prize = prize if prize else -1
+        self.prize = -1
+        if prize:
+            try: self.prize = int(prize)
+            except: pass
         self.FeverRaid.restart()
 
     @tasks.loop(minutes = 3)
