@@ -201,6 +201,9 @@ class Core(DBCog):
 
     @tasks.loop(minutes = 3)
     async def FeverRaid(self):
+        def removemd(txt):
+            for c in '\\<:`(_*~': txt = txt.replace(c, '\\' + c)
+            return txt
         guild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])        
         RaidChannel = guild.get_channel(self.DB['RaidChannel'])
         if RaidChannel == None: return
@@ -252,20 +255,20 @@ class Core(DBCog):
                 rewards[raider.id] = prize
                 dispname = self.GetDisplayName(raider)
                 desc += dispname + ', '
-            embed.add_field(name = f'{prize}개 획득 성공!', value = desc[:-2], inline = False)
+            embed.add_field(name = f'{prize}개 획득 성공!', value = removemd(desc[:-2]), inline = False)
         if len(boosts) > 0:
             desc = ''
             for raider in boosts:
                 rewards[raider.id] = 2 * prize
                 dispname = self.GetDisplayName(raider)
                 desc += dispname + ', '
-            embed.add_field(name = f'부스터 2배 혜택으로 {2 * prize}개 획득 성공!', value = desc[:-2], inline = False)
+            embed.add_field(name = f'부스터 2배 혜택으로 {2 * prize}개 획득 성공!', value = removemd(desc[:-2]), inline = False)
         if bonus.premium_since:
             rewards[bonus.id] = 4 * prize
-            embed.add_field(name = f'부스터 2배 혜택과 레이드 2배 당첨까지! {4 * prize}개 획득 성공!', value = self.GetDisplayName(bonus), inline = False)
+            embed.add_field(name = f'부스터 2배 혜택과 레이드 2배 당첨까지! {4 * prize}개 획득 성공!', value = removemd(self.GetDisplayName(bonus)), inline = False)
         else:
             rewards[bonus.id] = 2 * prize
-            embed.add_field(name = f'레이드 2배 당첨으로 {2 * prize}개 획득 성공!', value = self.GetDisplayName(bonus), inline = False)
+            embed.add_field(name = f'레이드 2배 당첨으로 {2 * prize}개 획득 성공!', value = removemd(self.GetDisplayName(bonus)), inline = False)
         await self.RaidMessage.edit(embed = embed)
         for userid in rewards:
             self.GetGlobalDB('Money')['mns'][userid] = self.GetGlobalDB('Money')['mns'].get(userid, 0) + rewards[userid]
