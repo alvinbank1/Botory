@@ -200,6 +200,7 @@ class Core(DBCog):
         if message.guild.id != self.GetGlobalDB()['StoryGuildID']: return
         if message.author.bot: return
         if message.channel.id == self.DB['channel']: return
+        if message.channel.category_id == 827828190394712105: return
         whoid = message.author.id
         if whoid not in self.DB['flag']: self.DB['flag'][whoid] = datetime.now()
         if self.DB['flag'][whoid] <= datetime.now():

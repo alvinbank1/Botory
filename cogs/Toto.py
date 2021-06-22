@@ -192,6 +192,7 @@ class Core(DBCog):
     @commands.command(name = 'goraid')
     @commands.has_guild_permissions(administrator = True)
     async def GoRaid(self, ctx, prize = None):
+        await ctx.message.delete()
         self.prize = -1
         if prize:
             try: self.prize = int(prize)
