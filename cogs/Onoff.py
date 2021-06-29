@@ -12,7 +12,7 @@ class Core(DBCog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        version = '3.4.0'
+        version = '3.4.1'
         await self.app.change_presence(activity = discord.Game(f'Botory {version} by Undec'))
         guild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])
         if self.DB['StopChannel']:
@@ -31,7 +31,12 @@ class Core(DBCog):
         perms = self.MemberRole.permissions
         perms.update(add_reactions = False, attach_files = False)
         await self.MemberRole.edit(permissions = perms)
-        await ctx.channel.send('장비를 정지합니다.')
+        deadmsg = await ctx.channel.send('장비를 정지합니다...')
+        self.GetGlobalDB()['deadflag'] = set()
+        await asyncio.sleep(1)
+        while self.GetGlobalDB()['deadflag']: pass
+        del self.GetGlobalDB()['deadflag']
+        await deadmsg.edit(content = '장비를 정지했습니다.')
         await self.app.change_presence(status = discord.Status.offline)
         await asyncio.sleep(1)
         await self.app.close()
