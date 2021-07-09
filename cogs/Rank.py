@@ -253,11 +253,10 @@ class Core(DBCog):
     async def Undead(self):
         if 'deadflag' in self.GetGlobalDB():
             self.GetGlobalDB()['deadflag'].add('Rank')
-            self.AutoFlush.cancel()
-            if self.RankChannel
-            self.printlog('Closing rank channel...')
-            MemberRole = discord.utils.get(self.StoryGuild.roles, name = '멤버')
-            await self.RankChannel.set_permissions(MemberRole, send_messages = False)
-            self.printlog('Rank channel closed.')
+            if self.RankChannel:
+                self.printlog('Closing rank channel...')
+                MemberRole = discord.utils.get(self.StoryGuild.roles, name = '멤버')
+                await self.RankChannel.set_permissions(MemberRole, send_messages = False)
+                self.printlog('Rank channel closed.')
             self.GetGlobalDB()['deadflag'].remove('Rank')
             self.Undead.cancel()
