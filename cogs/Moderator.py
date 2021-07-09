@@ -12,15 +12,9 @@ class Core(DBCog):
     @commands.command(name = 'ban')
     @commands.has_guild_permissions(administrator = True)
     async def ModBan(self, ctx, who: discord.User, reason = None):
+        channel = await member.create_dm()
+        embed = discord.Embed(title = '밴 안내', description = '당신은 The Stories 서버에서 밴되셨습니다.:zany_face:')
+        if reason: embed.add_field(name = '사유', value = reason)
+        await channel.send(embed = embed)
         await ctx.guild.ban(who, reason = reason, delete_message_days = 7)
         await ctx.send(embed = discord.Embed(title = 'RIP :zany_face:', description = f'**{who.name}#{who.discriminator}**'))
-
-    @commands.command(name = 'countban')
-    @commands.has_guild_permissions(administrator = True)
-    async def CountBan(self, ctx, count: int):
-        await ctx.message.delete()
-        msgs = await ctx.channel.history(limit = count).flatten()
-        for msg in msgs:
-            who = msg.author
-            if ctx.guild.get_member(who.id): continue
-            await ctx.guild.ban(who, delete_message_days = 7)
