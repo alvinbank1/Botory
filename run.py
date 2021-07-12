@@ -8,6 +8,7 @@ app = commands.Bot(command_prefix = '&', intents = discord.Intents.all(), help_c
 def main():
     global GDB
     GDB.requestDB('__global__')['StoryGuildID'] = 775210688183664640
+    GDB.requestDB('__global__')['OwnerID'] = 603897276410101789
     InitCogs()
     app.run(GetToken())
     GDB.saveall()

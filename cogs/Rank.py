@@ -58,8 +58,11 @@ class Core(DBCog):
     @commands.Cog.listener()
     async def on_ready(self):
         self.StoryGuild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])
+        try: self.RankChannel = self.StoryGuild.get_channel(self.DB['channel'])
+        except: pass
         self.TopRankMsg.start()
         self.AutoRole.start()
+        self.Undead.start()
 
     @tasks.loop(minutes = 10)
     async def TopRankMsg(self):
@@ -245,3 +248,15 @@ class Core(DBCog):
             has_dc = dcRole in who.roles
             if is_dc and not has_dc: await who.add_roles(dcRole)
             if not is_dc and has_dc: await who.remove_roles(dcRole)
+
+    @tasks.loop()
+    async def Undead(self):
+        if 'deadflag' in self.GetGlobalDB():
+            self.GetGlobalDB()['deadflag'].add('Rank')
+            if self.RankChannel:
+                self.printlog('Closing rank channel...')
+                MemberRole = discord.utils.get(self.StoryGuild.roles, name = '멤버')
+                await self.RankChannel.set_permissions(MemberRole, send_messages = False)
+                self.printlog('Rank channel closed.')
+            self.GetGlobalDB()['deadflag'].remove('Rank')
+            self.Undead.cancel()
