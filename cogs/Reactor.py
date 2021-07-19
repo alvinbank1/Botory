@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from StudioBot.pkgs.DBCog import DBCog
 from datetime import datetime
 from typing import Union
@@ -9,7 +9,7 @@ class Core(DBCog):
         self.CogName = 'Reactor'
         DBCog.__init__(self, app)
 
-    def initDB(self): return
+    def initDB(self): self.DB['ReactChannelID'] = None
 
     @commands.group(name = 'reactor')
     @commands.has_guild_permissions(administrator = True)
@@ -62,3 +62,23 @@ class Core(DBCog):
             for emoji in emojis:
                 if type(emoji) == int: emoji = discord.utils.get(self.app.emojis, id = emoji)
                 await message.add_reaction(emoji)
+
+    @commands.command(name = 'reacthere')
+    @commands.has_guild_permissions(administrator = True)
+    async def SetReact(self, ctx):
+        await ctx.message.delete()
+        self.DB['ReactChannelID'] = ctx.channel.id
+
+    @commands.Cog.listener()
+    async def on_ready(self): self.ReactSender.start()
+
+    @tasks.loop(seconds = 5)
+    async def ReactSender(self):
+        StoryGuild = self.app.get_guild(self.GetGlobalDB()['StoryGuildID'])
+        if not self.DB['ReactChannelID']: return
+        ReactChannel = StoryGuild.get_channel(self.DB['ReactChannelID'])
+        LastMessage = await ReactChannel.history(limit = 1).flatten()
+        if not LastMessage: return
+        LastMessage = LastMessage[0]
+        if len(LastMessage.reactions) < 20: return
+        await ReactChannel.send(chr(8203))
