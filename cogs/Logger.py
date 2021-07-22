@@ -72,6 +72,7 @@ class Core(DBCog):
                     timestamp = datetime.now(tz = timezone(timedelta(hours = 9))))
             embed.set_author(name = f'{user.name}#{user.discriminator}', icon_url = str(user.avatar_url))
             embed.add_field(name = 'emoji', value = str(payload.emoji), inline = False)
+            embed.set_thumbnail(url = payload.emoji.url)
             embed.add_field(name = 'User ID', value = str(payload.user_id), inline = False)
             embed.add_field(name = 'Message ID', value = str(payload.message_id), inline = False)
             for i in range(len(self.queue)):

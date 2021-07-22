@@ -159,7 +159,10 @@ class Core(DBCog):
         else: level = str(level)
         canvas.text((450, 150), name, font = ImageFont.truetype('NanumGothic.ttf', 60), fill = (255, 255, 255), anchor = 'lm')
         canvas.text((1350, 165), level, font = ImageFont.truetype('NanumGothic.ttf', 48), fill = (255, 255, 255), align = 'center', anchor = 'mm')
-        canvas.text((1110, 165), '%.1fk'%(xp / 1000), font = ImageFont.truetype('NanumGothic.ttf', 48), fill = (255, 255, 255), anchor = 'mm')
+        xpstr = str(xp)
+        if len(xpstr) > 3: xpstr = '%.1fk'%(xp / 1000)
+        if len(xpstr) > 6: xpstr = '%.1fM'%(xp / 1000 ** 2)
+        canvas.text((1110, 165), xpstr, font = ImageFont.truetype('NanumGothic.ttf', 48), fill = (255, 255, 255), anchor = 'mm')
 
         res.convert('RGBA')
         profile = Image.open(BytesIO(data['avatar']))
